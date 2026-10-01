@@ -121,3 +121,24 @@ def test_preenchimento_formulario_heuristico():
     assert d["formConsulta:checkNumProc"] == "on"
     assert d["formConsulta:btnConsultar"] == "Consultar"
     assert d["javax.faces.ViewState"] == "j_id1"
+
+
+def test_sincronizar_gera_documentos(tmp_path):
+    import json
+
+    from sipac_proplan.sincronizar import sincronizar
+
+    class Falso:
+        def buscar(self, num):
+            if num.numero == "012345":
+                return (FIX / "processo_em_andamento.html").read_text(encoding="utf-8")
+            from sipac_proplan.cliente import ErroConsulta
+            raise ErroConsulta("não encontrado")
+
+    nums = [parse_numero("23074.012345/2026-56"), parse_numero("23074.999999/2026-99")]
+    st = sincronizar(nums, Falso(), tmp_path)
+    assert st["atualizados"] == 1 and len(st["falhas"]) == 1
+    doc = json.loads((tmp_path / "processos" / "23074012345202656.json").read_text(encoding="utf-8"))
+    assert doc["chave"] == "23074012345202656"
+    assert doc["movs"][0]["envio"] == "2026-09-05T14:30"
+    assert doc["movs"][-1]["receb"] is None

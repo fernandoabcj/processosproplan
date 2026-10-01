@@ -160,6 +160,18 @@ def cmd_processo(args) -> int:
     return 0
 
 
+def cmd_sincronizar(args) -> int:
+    from .sincronizar import sincronizar
+
+    numeros = _numeros(args)
+    if not numeros:
+        print("Nenhum número de processo informado.", file=sys.stderr)
+        return 2
+    st = sincronizar(numeros, _cliente(args), Path(args.saida_json), PASTA_HTML)
+    print(json.dumps(st, ensure_ascii=False, indent=1))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="sipac_proplan",
@@ -198,6 +210,13 @@ def main(argv: list[str] | None = None) -> int:
     opc_coleta(p)
     opc_analise(p)
     p.set_defaults(func=cmd_executar)
+
+    p = sub.add_parser("sincronizar", help="busca no SIPAC e gera JSON para a ferramenta web")
+    p.add_argument("entrada", nargs="*", help="arquivos com números de processo")
+    p.add_argument("-n", "--numero", action="append", help="número de processo (pode repetir)")
+    p.add_argument("--saida-json", default="dados/sync", help="pasta de saída (processos/*.json e status.json)")
+    p.add_argument("--debug", action="store_true", help="grava as páginas intermediárias em dados/debug")
+    p.set_defaults(func=cmd_sincronizar)
 
     p = sub.add_parser("processo", help="mostra no terminal a análise de um processo")
     p.add_argument("numero")

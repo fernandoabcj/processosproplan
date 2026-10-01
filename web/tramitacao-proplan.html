@@ -365,7 +365,7 @@ const EXEMPLOS = (() => {
 
 /* ================================================================ estado e armazenamento */
 const S = { view:"painel", reais:new Map(), carregou:false, db:null, user:null, uid:null, podeEscrever:null, podeAdmin:false,
-  cfgRaw:CFG_PADRAO, cfg:compilarCfg(CFG_PADRAO), lista:[], sel:null, busca:"", filtroSetor:"", filtroSit:"", confirmar:null, ordem:{} };
+  cfgRaw:CFG_PADRAO, cfg:compilarCfg(CFG_PADRAO), lista:[], fila:new Map(), status:null, sel:null, busca:"", filtroSetor:"", filtroSit:"", confirmar:null, ordem:{} };
 
 function dados(){ return S.reais.size ? [...S.reais.values()] : EXEMPLOS; }
 const ehExemplo = () => S.reais.size === 0;
@@ -458,7 +458,9 @@ function telaPainel(){
   const lista = (m) => { const arr = [...m.entries()].sort((a,b)=>b[1]-a[1]).slice(0,12); const mx = arr[0]?.[1]||1;
     return arr.map(([k,v]) => `<tr><td>${esc(k)}</td><td class="n">${v}</td><td style="width:35%"><div class="bartrack"><div class="bar" style="width:${100*v/mx}%"></div></div></td></tr>`); };
   const mediaPP = pp.length ? media(pp.map(a=>a.totalProplan)) : 0;
-  return `${bannerExemplo()}
+  const st = S.status;
+  const linhaStatus = S.db && st ? `<div class="note">Atualização automática: ${st.erro_geral ? `<span class="pill crit">SIPAC inacessível</span>` : `última em ${fd(new Date(st.ultima_execucao),true)}`}${S.fila.size ? ` · ${S.fila.size} processo(s) na fila` : ""}</div>` : "";
+  return `${bannerExemplo()}${linhaStatus}
   <div class="kpis">
     <div class="kpi"><span class="v">${pp.length}</span><span class="l">processos que passaram pela PROPLAN</span></div>
     <div class="kpi"><span class="v">${hoje.length}</span><span class="l">estão hoje em unidade da PROPLAN</span></div>
@@ -518,7 +520,7 @@ function telaDetalhe(){
     <td>${fd(x.inicio,true)}</td><td>${x.receb ? fd(x.receb,true) : (x.fim ? "—" : `<span class="pill warn">não recebido</span>`)}</td>
     <td>${x.fim ? fd(x.fim,true) : "<b>atual</b>"}</td><td class="n">${n1(x.dias)}</td><td class="n">${x.uteis}</td><td class="n">${n1(x.aguard)}</td></tr>`);
   const setoresPassou = Object.keys(a.porSetor);
-  const quem = p.atualizado_por ? `<span data-uid="${esc(p.atualizado_por)}"></span>` : "";
+  const quem = p.fonte === "automatico" ? `<span class="note">(busca automática)</span>` : p.atualizado_por ? `<span data-uid="${esc(p.atualizado_por)}"></span>` : "";
   return `<section class="sec" id="detalhe">
     <div class="det-head"><div><div class="num">${esc(p.numero)}</div><div>${esc(p.assunto)}</div>
       ${p.assunto_detalhado ? `<div class="note">${esc(p.assunto_detalhado)}</div>` : ""}</div>
@@ -547,17 +549,28 @@ function telaAdicionar(){
   const reais = S.reais;
   const pend = S.lista.map(n => { const k = numProc(n)?.chave; const p = k && reais.get(k);
     const idade = p?.atualizado_em ? (Date.now()-new Date(p.atualizado_em))/DIA : null;
-    return `<tr${p?` class="click" data-p="${k}"`:""}><td class="mono">${esc(n)}</td><td>${p ? (idade > 7 ? `<span class="pill warn">atualizado há ${Math.floor(idade)} dias</span>` : `<span class="pill ok">atualizado</span>`) : `<span class="pill neu">ainda não adicionado</span>`}</td>
+    return `<tr${p?` class="click" data-p="${k}"`:""}><td class="mono">${esc(n)}</td><td>${p ? (idade > 7 ? `<span class="pill warn">atualizado há ${Math.floor(idade)} dias</span>` : `<span class="pill ok">atualizado</span>`) : (S.fila.has(k) ? `<span class="pill warn">na fila de busca</span>` : `<span class="pill neu">aguardando busca</span>`)}</td>
     <td>${p ? fd(new Date(p.atualizado_em),true) : ""}</td></tr>`; });
   const so = S.podeEscrever === false;
+  const fila = [...S.fila.values()].sort((a,b)=> (a.solicitado_em||"") < (b.solicitado_em||"") ? 1 : -1);
   return `<section class="sec">
-    <h2>Adicionar ou atualizar processos</h2>
+    <div class="sec-head"><h2>Adicionar processo pelo número</h2><span class="note">A busca no SIPAC é feita pela atualização automática, a cada hora.</span></div>
+    <form class="row" id="form-num">
+      <input type="text" id="novo-num" placeholder="23074.012345/2026-56" aria-label="Número do processo" style="flex:1 1 260px;max-width:420px" ${so||!S.db?"disabled":""}>
+      <button class="btn pri" type="submit" ${so||!S.db?"disabled":""}>Adicionar</button>
+    </form>
+    <span class="note">Pode colar vários números de uma vez. Cada processo entra na fila e também na lista de acompanhamento, que é atualizada toda hora.</span>
+    ${fila.length ? tabela("t-fila",[{t:"Na fila de busca"},{t:"Pedido em"}], fila.map(f=>`<tr><td class="mono">${esc(f.numero)}</td><td>${f.solicitado_em ? fd(new Date(f.solicitado_em),true) : ""}</td></tr>`)) : ""}
+  </section>
+  ${statusColetor()}
+  <section class="sec">
+    <h2>Colar a página do processo (alternativa manual)</h2>
     ${so ? `<div class="banner"><span>Seu acesso a esta ferramenta é <b>somente leitura</b>. Peça ao responsável acesso de Colaborador para adicionar processos.</span></div>` : ""}
     ${!S.db ? `<div class="banner"><span><b>Modo local:</b> o armazenamento compartilhado não está disponível nesta visualização. O que você colar aqui fica só nesta aba.</span></div>` : ""}
     <ol class="steps">
       <li>Abra a <a href="${URL_SIPAC}" target="_blank" rel="noopener">consulta pública de processos do SIPAC</a>, busque o processo e abra a tela de detalhes, que mostra as movimentações.</li>
       <li>Selecione tudo (<b>Ctrl+A</b>) e copie (<b>Ctrl+C</b>).</li>
-      <li>Clique na área abaixo e cole (<b>Ctrl+V</b>). O processo é lido e salvo na hora. Colar de novo o mesmo processo atualiza as movimentações.</li>
+      <li>Clique na área abaixo e cole (<b>Ctrl+V</b>). O processo é lido e salvo na hora, sem esperar a atualização automática.</li>
     </ol>
     <div class="drop" id="drop" tabindex="0" role="button" aria-label="Área para colar ou soltar processos">
       <b>Clique aqui e cole a página do processo (Ctrl+V)</b>
@@ -635,6 +648,9 @@ document.addEventListener("click", async ev => {
     case "exp-xlsx": await exportar(); break;
   }
 });
+document.addEventListener("submit", ev => {
+  if (ev.target.id === "form-num"){ ev.preventDefault(); solicitar($("#novo-num").value); }
+});
 document.addEventListener("input", ev => {
   if (ev.target.id === "busca"){ S.busca = ev.target.value; render(); }
 });
@@ -643,7 +659,7 @@ document.addEventListener("change", ev => {
   if (ev.target.id === "f-sit"){ S.filtroSit = ev.target.value; render(); }
 });
 document.addEventListener("paste", ev => {
-  if (S.view !== "adicionar" || ["lista","c-fer"].includes(document.activeElement?.id) || document.activeElement?.closest?.(".cfg-item")) return;
+  if (S.view !== "adicionar" || ["lista","c-fer","novo-num"].includes(document.activeElement?.id) || document.activeElement?.closest?.(".cfg-item")) return;
   ev.preventDefault();
   const html = ev.clipboardData.getData("text/html"), texto = ev.clipboardData.getData("text/plain");
   if (!html && !texto){ toast("A área de transferência está vazia."); return; }
@@ -671,6 +687,36 @@ function ordenar(th){
     .forEach(r => tb.appendChild(r));
 }
 
+async function solicitar(texto){
+  const nums = todosNums(texto);
+  if (!nums.size){ toast("Digite um número de processo no formato 23074.000000/2026-00."); return; }
+  if (!S.db){ toast("A busca automática só funciona com o armazenamento compartilhado disponível."); return; }
+  const agora = new Date().toISOString(); let n = 0;
+  try {
+    for (const [chave, numero] of nums){
+      if (S.fila.has(chave)) continue;
+      await S.db.collection("solicitacoes").doc(chave).set({numero, solicitado_em:agora, por:S.uid || null}); n++;
+    }
+    const novos = [...nums.values()].filter(x => !S.lista.includes(x));
+    if (novos.length){ const lista = [...S.lista, ...novos]; await S.db.doc("acompanhamento/lista").set({numeros:lista, atualizado_em:agora}); }
+  } catch(e){ toast(e?.code === "invalid_argument" ? "Sem permissão para adicionar processos." : "Não foi possível registrar agora. Tente de novo."); return; }
+  const inp = $("#novo-num"); if (inp) inp.value = "";
+  toast(n === 1 ? "Processo na fila. Ele será buscado no SIPAC na próxima atualização (até 1 hora)." : `${n} processos na fila de busca.`);
+}
+function statusColetor(){
+  const st = S.status;
+  if (!S.db) return "";
+  if (!st) return `<div class="banner"><span><b>Busca automática:</b> aguardando a primeira execução. A atualização roda a cada hora.</span></div>`;
+  const quando = st.ultima_execucao ? fd(new Date(st.ultima_execucao), true) : "—";
+  const prox = st.ultima_execucao ? fd(new Date(new Date(st.ultima_execucao).getTime()+3600000), true) : "—";
+  const falhas = (st.falhas||[]);
+  const erroGeral = st.erro_geral ? `<div><span class="pill crit">falha</span> ${esc(st.erro_geral)}</div>` : "";
+  return `<section class="sec"><div class="sec-head"><h2>Atualização automática</h2>
+    <span class="note">Última: ${quando} · próxima por volta de ${prox}</span></div>
+    <div class="row"><span class="pill ${st.erro_geral ? "crit" : falhas.length ? "warn" : "ok"}">${st.erro_geral ? "SIPAC inacessível" : `${st.atualizados||0} de ${st.total||0} atualizados`}</span>
+    ${S.fila.size ? `<span class="pill neu">${S.fila.size} na fila</span>` : ""}</div>
+    ${erroGeral}${falhas.slice(0,8).map(f=>`<div class="note"><span class="mono">${esc(f.numero)}</span>: ${esc(f.erro)}</div>`).join("")}</section>`;
+}
 async function salvarLista(){
   const nums = [...todosNums($("#lista").value).values()];
   if (S.db){ try { await S.db.doc("acompanhamento/lista").set({numeros:nums, atualizado_em:new Date().toISOString()}); toast(`Lista salva com ${nums.length} processo(s).`); }
@@ -729,6 +775,8 @@ render();
   db.collection("processos").onSnapshot(snap => {
     S.reais = new Map(snap.docs.map(d => [d.id, d.data()])); S.carregou = true; render();
   }, () => toast("Conexão com os dados perdida. Recarregue a página."));
+  db.collection("solicitacoes").onSnapshot(snap => { S.fila = new Map(snap.docs.map(d => [d.id, d.data()])); if (document.activeElement?.id !== "novo-num") render(); }, ()=>{});
+  db.doc("status/coletor").onSnapshot(s => { S.status = s.exists ? s.data() : null; if (document.activeElement?.id !== "novo-num") render(); }, ()=>{});
   db.doc("config/setores").onSnapshot(s => aplicarCfg(s.exists ? s.data() : null), ()=>{});
   db.doc("acompanhamento/lista").onSnapshot(s => { S.lista = s.exists ? (s.data().numeros||[]) : []; if (S.view === "adicionar" && document.activeElement?.id !== "lista") render(); }, ()=>{});
   render();
