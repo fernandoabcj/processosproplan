@@ -1,0 +1,47 @@
+{
+  "_comentario": "Regras para reconhecer as unidades da PROPLAN nas movimentações do SIPAC. A ordem importa: a primeira regra que casar define o setor (deixe a PROPLAN genérica por último). 'codigos' aceita o código SIPAC da unidade (ex.: 11.01.04.02) e é o critério mais confiável; 'padroes' são expressões regulares aplicadas ao nome da unidade já em MAIÚSCULAS e sem acentos.",
+  "setores": [
+    {
+      "sigla": "CODEOR",
+      "nome": "Coordenação de Orçamento",
+      "codigos": [],
+      "padroes": ["\\bCODEOR\\b", "COORDENACAO DE ORCAMENTO"]
+    },
+    {
+      "sigla": "CODEINFO",
+      "nome": "Coordenação de Informações",
+      "codigos": [],
+      "padroes": ["\\bCODEINFO\\b", "COORDENACAO DE INFORMAC"]
+    },
+    {
+      "sigla": "CODECON",
+      "nome": "Coordenação de Convênios",
+      "codigos": [],
+      "padroes": ["\\bCODECON\\b", "COORDENACAO DE CONVENIOS"]
+    },
+    {
+      "sigla": "CODEPLAN",
+      "nome": "Coordenação de Planejamento",
+      "codigos": [],
+      "padroes": ["\\bCODEPLAN\\b", "COORDENACAO DE PLANEJAMENTO"]
+    },
+    {
+      "sigla": "SECRETARIA",
+      "nome": "Secretaria da PROPLAN",
+      "codigos": [],
+      "padroes": ["SECRETARIA.*(PROPLAN|PRO-REITORIA DE PLANEJAMENTO)", "PROPLAN.*SECRETARIA", "\\bSEC[-/ ]?PROPLAN\\b"]
+    },
+    {
+      "sigla": "PROPLAN",
+      "nome": "PROPLAN (Gabinete)",
+      "codigos": [],
+      "padroes": ["\\bPROPLAN\\b", "PRO-REITORIA DE PLANEJAMENTO"]
+    }
+  ],
+  "alertas": {
+    "dias_parado_no_setor": 15,
+    "dias_aguardando_recebimento": 3,
+    "passagens_repetidas": 3
+  },
+  "feriados": []
+}
