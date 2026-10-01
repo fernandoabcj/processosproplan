@@ -354,7 +354,7 @@ def resumo_texto(a: AnaliseProcesso) -> str:
         f"Processo {p.numero} — {p.assunto}",
         f"  Status: {p.status or '—'} | Autuação: {_d(p.data_autuacao)} | Origem: {p.unidade_origem or '—'}",
         f"  Local atual: {a.unidade_atual} [{a.setor_atual or 'fora da PROPLAN'}] há "
-        f"{duracao(a.dias_unidade_atual)} ({a.dias_uteis_unidade_atual} dias úteis)"
+        f"{duracao(a.dias_unidade_atual)} ({a.dias_uteis_unidade_atual} {"dia útil" if a.dias_uteis_unidade_atual == 1 else "dias úteis"})"
         + (" — AGUARDANDO RECEBIMENTO" if a.aguardando_recebimento else ""),
         f"  Tramitação total: {duracao(a.dias_tramitacao_total)} | Na PROPLAN: {duracao(a.dias_total_proplan)}",
     ]
