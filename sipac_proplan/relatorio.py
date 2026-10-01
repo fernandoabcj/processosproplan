@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .analise import AnaliseProcesso, Consolidado
 from .config import Config
+from .util import duracao
 
 
 def _n(x: float, casas: int = 1) -> str:
@@ -87,24 +88,24 @@ def _tabela_setores(c: Consolidado, cfg: Config) -> str:
         linhas.append(
             f"<tr><td><b>{_e(s.sigla)}</b><br><small>{_e(s.nome)}</small></td>"
             f'<td class="n">{s.processos}</td><td class="n">{s.passagens}</td>'
-            f'<td class="n" data-v="{s.media:.3f}">{_n(s.media)}</td>'
+            f'<td class="n" data-v="{s.media:.3f}">{duracao(s.media)}</td>'
             f'<td style="width:140px"><div class="bar" style="width:{largura:.0f}%"></div></td>'
-            f'<td class="n" data-v="{s.mediana:.3f}">{_n(s.mediana)}</td>'
-            f'<td class="n" data-v="{s.maximo:.3f}">{_n(s.maximo)}</td>'
-            f'<td class="n" data-v="{s.media_aguardando:.3f}">{_n(s.media_aguardando)}</td>'
+            f'<td class="n" data-v="{s.mediana:.3f}">{duracao(s.mediana)}</td>'
+            f'<td class="n" data-v="{s.maximo:.3f}">{duracao(s.maximo)}</td>'
+            f'<td class="n" data-v="{s.media_aguardando:.3f}">{duracao(s.media_aguardando)}</td>'
             f'<td class="n">{s.em_estoque}</td>'
-            f'<td class="n" data-v="{s.idade_media_estoque:.3f}">{_n(s.idade_media_estoque)}</td>'
+            f'<td class="n" data-v="{s.idade_media_estoque:.3f}">{duracao(s.idade_media_estoque)}</td>'
             f'<td class="n">{acima}</td></tr>'
         )
     return (
         '<div class="tw"><table><thead><tr><th>Setor</th><th class="n">Processos</th>'
-        '<th class="n">Passagens</th><th class="n">Média dias/passagem</th><th></th>'
+        '<th class="n">Passagens</th><th class="n">Tempo médio por passagem</th><th></th>'
         '<th class="n">Mediana</th><th class="n">Máximo</th><th class="n">Média até receber</th>'
         f'<th class="n">Em estoque hoje</th><th class="n">Idade média estoque</th>'
         f'<th class="n">Estoque ≥ {cfg.dias_parado_no_setor} dias</th></tr></thead><tbody>'
         + "".join(linhas)
         + "</tbody></table></div><p><small>Média, mediana e máximo consideram apenas passagens "
-        "concluídas (o processo já saiu do setor). Dias corridos.</small></p>"
+        "concluídas (o processo já saiu do setor). Tempo corrido.</small></p>"
     )
 
 
@@ -124,9 +125,9 @@ def _tabela_estoque(analises: list[AnaliseProcesso]) -> str:
             f"<tr><td><a href='#p{_e(a.processo.numero)}'>{_e(a.processo.numero)}</a></td>"
             f"<td>{_e(a.processo.assunto)}</td><td>{_tag_setor(a.setor_atual)}</td>"
             f"<td>{_e(p.veio_de)}</td><td>{_d(p.inicio, True)}</td><td>{situacao}</td>"
-            f'<td class="n" data-v="{a.dias_unidade_atual:.3f}"><span{cls}>{_n(a.dias_unidade_atual)}</span></td>'
+            f'<td class="n" data-v="{a.dias_unidade_atual:.3f}"><span{cls}>{duracao(a.dias_unidade_atual)}</span></td>'
             f'<td class="n">{a.dias_uteis_unidade_atual}</td>'
-            f'<td class="n" data-v="{a.dias_total_proplan:.3f}">{_n(a.dias_total_proplan)}</td></tr>'
+            f'<td class="n" data-v="{a.dias_total_proplan:.3f}">{duracao(a.dias_total_proplan)}</td></tr>'
         )
     return (
         '<input type="search" placeholder="Filtrar…" data-filtra="#estoque tbody tr">'
@@ -144,7 +145,7 @@ def _tabela_processos(analises: list[AnaliseProcesso], cfg: Config) -> str:
     for a in sorted(analises, key=lambda a: -a.dias_total_proplan):
         cols = "".join(
             f'<td class="n" data-v="{a.dias_por_setor.get(s, 0):.3f}">'
-            + (_n(a.dias_por_setor[s]) + (f" <small>({a.passagens_por_setor[s]}x)</small>"
+            + (duracao(a.dias_por_setor[s]) + (f" <small>({a.passagens_por_setor[s]}x)</small>"
                if a.passagens_por_setor.get(s, 0) > 1 else "")
                if s in a.dias_por_setor else "—")
             + "</td>"
@@ -156,10 +157,10 @@ def _tabela_processos(analises: list[AnaliseProcesso], cfg: Config) -> str:
         linhas.append(
             f"<tr><td><a href='#p{_e(a.processo.numero)}'>{_e(a.processo.numero)}</a></td>"
             f"<td>{_e(a.processo.assunto)}</td><td>{atual}</td>"
-            f'<td class="n" data-v="{a.dias_unidade_atual:.3f}">{_n(a.dias_unidade_atual)}</td>'
+            f'<td class="n" data-v="{a.dias_unidade_atual:.3f}">{duracao(a.dias_unidade_atual)}</td>'
             f"{cols}"
-            f'<td class="n" data-v="{a.dias_total_proplan:.3f}"><b>{_n(a.dias_total_proplan)}</b></td>'
-            f'<td class="n" data-v="{a.dias_tramitacao_total:.3f}">{_n(a.dias_tramitacao_total)}</td></tr>'
+            f'<td class="n" data-v="{a.dias_total_proplan:.3f}"><b>{duracao(a.dias_total_proplan)}</b></td>'
+            f'<td class="n" data-v="{a.dias_tramitacao_total:.3f}">{duracao(a.dias_tramitacao_total)}</td></tr>'
         )
     return (
         '<input type="search" placeholder="Filtrar por número, assunto, setor…" '
@@ -195,8 +196,8 @@ def _detalhe(a: AnaliseProcesso) -> str:
             f"<tr{' class=pp' if perm.setor else ''}><td>{_tag_setor(perm.setor)} {_e(perm.unidade)}</td>"
             f"<td>{_e(perm.veio_de)}</td><td>{_d(perm.inicio, True)}</td><td>{receb}</td>"
             f"<td>{_d(perm.fim, True) if perm.fim else '<b>atual</b>'}</td>"
-            f'<td class="n">{_n(perm.dias)}</td><td class="n">{perm.dias_uteis}</td>'
-            f'<td class="n">{_n(perm.dias_aguardando_recebimento)}</td></tr>'
+            f'<td class="n">{duracao(perm.dias)}</td><td class="n">{perm.dias_uteis}</td>'
+            f'<td class="n">{duracao(perm.dias_aguardando_recebimento)}</td></tr>'
         )
     alertas = "".join(f'<li><span class="tag al">alerta</span> {_e(x)}</li>' for x in a.alertas)
     interessados = "; ".join(p.interessados[:5])
@@ -247,7 +248,7 @@ Setores: {", ".join(_e(s) for s in cfg.siglas)}</div></header><main>
 <div class="kpi"><b>{len(atuais)}</b><span>estão hoje na PROPLAN</span></div>
 <div class="kpi"><b>{sum(1 for a in atuais if a.dias_unidade_atual >= cfg.dias_parado_no_setor)}</b>
 <span>parados ≥ {cfg.dias_parado_no_setor} dias</span></div>
-<div class="kpi"><b>{_n(medio_total)}</b><span>dias médios na PROPLAN por processo</span></div>
+<div class="kpi"><b>{duracao(medio_total)}</b><span>tempo médio de cada processo na PROPLAN</span></div>
 <div class="kpi"><b>{len(com_alerta)}</b><span>processos com alerta</span></div>
 </div>
 <section><h2>Desempenho por setor</h2>{_tabela_setores(c, cfg)}</section>
@@ -353,19 +354,19 @@ def resumo_texto(a: AnaliseProcesso) -> str:
         f"Processo {p.numero} — {p.assunto}",
         f"  Status: {p.status or '—'} | Autuação: {_d(p.data_autuacao)} | Origem: {p.unidade_origem or '—'}",
         f"  Local atual: {a.unidade_atual} [{a.setor_atual or 'fora da PROPLAN'}] há "
-        f"{_n(a.dias_unidade_atual)} dias ({a.dias_uteis_unidade_atual} úteis)"
+        f"{duracao(a.dias_unidade_atual)} ({a.dias_uteis_unidade_atual} dias úteis)"
         + (" — AGUARDANDO RECEBIMENTO" if a.aguardando_recebimento else ""),
-        f"  Tramitação total: {_n(a.dias_tramitacao_total)} dias | Na PROPLAN: {_n(a.dias_total_proplan)} dias",
+        f"  Tramitação total: {duracao(a.dias_tramitacao_total)} | Na PROPLAN: {duracao(a.dias_total_proplan)}",
     ]
     if a.dias_por_setor:
         out.append("  Por setor: " + "; ".join(
-            f"{s} {_n(d)} d ({a.passagens_por_setor[s]}x)" for s, d in a.dias_por_setor.items()))
+            f"{s} {duracao(d)} ({a.passagens_por_setor[s]}x)" for s, d in a.dias_por_setor.items()))
     out.append("  Movimentação:")
     for perm in a.permanencias:
         marca = f"[{perm.setor}]" if perm.setor else "        "
         out.append(
             f"    {_d(perm.inicio, True):<16} {marca:<12} {perm.unidade[:60]:<60} "
-            f"{_n(perm.dias):>7} d" + ("  <- atual" if perm.aberta else "")
+            f"{duracao(perm.dias):>12}" + ("  <- atual" if perm.aberta else "")
         )
     for al in a.alertas:
         out.append(f"  ! {al}")

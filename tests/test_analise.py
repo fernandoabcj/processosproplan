@@ -146,3 +146,13 @@ def test_sincronizar_gera_documentos(tmp_path):
     assert doc["chave"] == "23074012345202656"
     assert doc["movs"][0]["envio"] == "2026-09-05T14:30"
     assert doc["movs"][-1]["receb"] is None
+
+
+def test_duracao_legivel():
+    from sipac_proplan.util import duracao
+
+    assert duracao(1.5) == "1 dia 12h"
+    assert duracao(0.2) == "4h 48min"
+    assert duracao(0.01) == "14 min"
+    assert duracao(154.4) == "154 dias 9h"
+    assert duracao(2) == "2 dias"

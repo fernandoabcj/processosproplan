@@ -120,3 +120,17 @@ def dias_uteis(inicio: datetime, fim: datetime, feriados: set[date] | None = Non
             total += 1
         d += timedelta(days=1)
     return total
+
+
+def duracao(dias: float | None) -> str:
+    """Tempo legível: 1,5 -> '1 dia 12h'; 0,2 -> '4h 48min'; < 1 h -> '35 min'."""
+    if dias is None:
+        return "—"
+    minutos = round(dias * 1440)
+    if minutos < 60:
+        return f"{minutos} min"
+    d, resto = divmod(minutos, 1440)
+    h, m = divmod(resto, 60)
+    if not d:
+        return f"{h}h {m}min" if m else f"{h}h"
+    return f"{d} {'dia' if d == 1 else 'dias'}" + (f" {h}h" if h else "")
