@@ -130,6 +130,7 @@ const DIA = 86400000;
 const RE_PROC = /(?<!\d)(\d{5})\s*[.\-]?\s*(\d{6})\s*\/\s*(\d{4})\s*-?\s*(\d{2})(?!\d)/;
 const RE_PROC_G = new RegExp(RE_PROC.source, "g");
 const RE_DATA = /(\d{2})\/(\d{2})\/(\d{4})(?:\s+(?:às\s+)?(\d{1,2}):(\d{2})(?::(\d{2}))?)?/;
+const ROTINA = "trig_01Sbnhk7Hm8RJehKubr3H3zi";
 const URL_SIPAC = "https://sipac.ufpb.br/public/jsp/processos/processo_consulta.jsf";
 
 function numProc(t){ const m = RE_PROC.exec(t||""); return m ? {fmt:`${m[1]}.${m[2]}/${m[3]}-${m[4]}`, chave:m.slice(1,5).join("")} : null; }
@@ -554,14 +555,18 @@ function telaAdicionar(){
   const so = S.podeEscrever === false;
   const fila = [...S.fila.values()].sort((a,b)=> (a.solicitado_em||"") < (b.solicitado_em||"") ? 1 : -1);
   return `<section class="sec">
-    <div class="sec-head"><h2>Adicionar processo pelo número</h2><span class="note">A busca no SIPAC é feita pela atualização automática, a cada hora.</span></div>
+    <div class="sec-head"><h2>Adicionar processo pelo número</h2><span class="note">A busca no SIPAC começa na hora. Depois, todos os processos são atualizados de hora em hora, das 07h às 18h.</span></div>
     <form class="row" id="form-num">
       <input type="text" id="novo-num" placeholder="23074.012345/2026-56" aria-label="Número do processo" style="flex:1 1 260px;max-width:420px" ${so||!S.db?"disabled":""}>
       <button class="btn pri" type="submit" ${so||!S.db?"disabled":""}>Adicionar</button>
     </form>
-    <span class="note">Pode colar vários números de uma vez. Cada processo entra na fila e também na lista de acompanhamento, que é atualizada toda hora.</span>
+    <span class="note">Pode colar vários números de uma vez. Cada processo entra na fila e também na lista de acompanhamento, que é atualizada de hora em hora, das 07h às 18h.</span>
     ${fila.length ? tabela("t-fila",[{t:"Na fila de busca"},{t:"Pedido em"}], fila.map(f=>`<tr><td class="mono">${esc(f.numero)}</td><td>${f.solicitado_em ? fd(new Date(f.solicitado_em),true) : ""}</td></tr>`)) : ""}
   </section>
+  ${S.imediata ? `<div class="banner"><span>${S.imediata.estado === "enviando" ? "Iniciando a busca no SIPAC…" :
+     S.imediata.estado === "ok" ? `<b>Busca imediata iniciada às ${fd(S.imediata.quando,true).slice(-5)}.</b> O processo aparece no painel assim que a busca terminar, em geral em poucos minutos.` :
+     S.imediata.estado === "falhou" ? `<b>Busca imediata indisponível:</b> ${esc(S.imediata.motivo)}. O processo está na fila e será buscado na próxima atualização.` :
+     `O processo está na fila e será buscado na próxima atualização.`}</span></div>` : ""}
   ${statusColetor()}
   <section class="sec">
     <h2>Colar a página do processo (alternativa manual)</h2>
@@ -701,14 +706,40 @@ async function solicitar(texto){
     if (novos.length){ const lista = [...S.lista, ...novos]; await S.db.doc("acompanhamento/lista").set({numeros:lista, atualizado_em:agora}); }
   } catch(e){ toast(e?.code === "invalid_argument" ? "Sem permissão para adicionar processos." : "Não foi possível registrar agora. Tente de novo."); return; }
   const inp = $("#novo-num"); if (inp) inp.value = "";
-  toast(n === 1 ? "Processo na fila. Ele será buscado no SIPAC na próxima atualização (até 1 hora)." : `${n} processos na fila de busca.`);
+  await buscaImediata([...nums.values()]);
+}
+/* Dispara a rotina de atualização na hora, pelo conector Claude Code Remote do próprio usuário.
+   Sem o conector (ou para quem não é dono da rotina), o processo fica na fila para a próxima hora cheia. */
+async function buscaImediata(numeros){
+  const fila = "O processo foi para a fila e será buscado na próxima atualização (07h às 18h, de hora em hora).";
+  const mcp = window.claude?.use ? await window.claude.use("mcp").catch(()=>null) : null;
+  if (!mcp){ S.imediata = {estado:"fila"}; render(); toast(fila); return; }
+  S.imediata = {estado:"enviando", quando:new Date()}; render();
+  try {
+    await mcp.callTool("Claude Code Remote", "fire_trigger", {trigger_id:ROTINA,
+      text:"BUSCA IMEDIATA disparada pela página: processe agora somente as solicitações pendentes da coleção solicitacoes (" + numeros.join(", ") + "), sem percorrer a lista de acompanhamento inteira, e grave o status normalmente."});
+    S.imediata = {estado:"ok", quando:new Date()}; toast("Busca no SIPAC iniciada. O resultado aparece aqui em alguns minutos.");
+  } catch(e){
+    const motivo = {server_not_connected:"o conector Claude Code Remote não está conectado na sua conta",
+      needs_reauth:"o conector Claude Code Remote precisa ser reconectado em Configurações → Conectores",
+      not_in_manifest:"a busca imediata não foi autorizada nesta página", blocked_by_policy:"a política da organização bloqueia a busca imediata",
+      tool_error:"a rotina recusou o disparo (somente o dono da rotina pode iniciá-la)"}[e?.code];
+    S.imediata = {estado:"falhou", motivo: motivo || "o disparo não respondeu"};
+    toast(fila);
+  }
+  render();
+}
+function proximaExecucao(){
+  const d = new Date(); d.setSeconds(0,0);
+  for (let i=0;i<60*48;i++){ d.setMinutes(d.getMinutes()+1); if (d.getMinutes()===2 && d.getHours()>=7 && d.getHours()<=18) return fd(d,true); }
+  return "—";
 }
 function statusColetor(){
   const st = S.status;
   if (!S.db) return "";
-  if (!st) return `<div class="banner"><span><b>Busca automática:</b> aguardando a primeira execução. A atualização roda a cada hora.</span></div>`;
+  if (!st) return `<div class="banner"><span><b>Busca automática:</b> aguardando a primeira execução. A atualização roda de hora em hora, das 07h às 18h.</span></div>`;
   const quando = st.ultima_execucao ? fd(new Date(st.ultima_execucao), true) : "—";
-  const prox = st.ultima_execucao ? fd(new Date(new Date(st.ultima_execucao).getTime()+3600000), true) : "—";
+  const prox = proximaExecucao();
   const falhas = (st.falhas||[]);
   const erroGeral = st.erro_geral ? `<div><span class="pill crit">falha</span> ${esc(st.erro_geral)}</div>` : "";
   return `<section class="sec"><div class="sec-head"><h2>Atualização automática</h2>
