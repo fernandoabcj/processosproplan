@@ -409,6 +409,7 @@ function conferidoEm(p){
   const base = encerrado ? st.ultima_encerrados : (foco || st.completo !== false ? st.ultima_execucao : st.ultima_completa);
   return max(mud, base ? new Date(base) : null);
 }
+function naoPublico(numero){ return (S.status?.falhas||[]).some(f => f.numero === numero && /não encontrado/i.test(f.erro||"")); }
 function cadastradoNo(sig, chave){ return !!S.chavesPor[sig]?.has(chave); }
 function enriquecer(a){
   const v = V();
@@ -643,7 +644,7 @@ function telaAdicionar(){
   const setoresDe = n => Object.entries(S.listaPor).filter(([k,v]) => k !== "_geral" && v.includes(n)).map(([k]) => k);
   const pend = listaVis.map(n => { const k = numProc(n)?.chave; const p = k && reais.get(k);
     const conf = conferidoEm(p), idade = conf ? (Date.now()-conf)/DIA : null;
-    return `<tr${p?` class="click" data-p="${k}"`:""}><td class="mono">${esc(n)}</td><td>${p ? (idade > 7 ? `<span class="pill warn">atualizado há ${Math.floor(idade)} dias</span>` : `<span class="pill ok">em dia</span>`) : (S.fila.has(k) ? `<span class="pill warn">na fila de busca</span>` : `<span class="pill neu">aguardando busca</span>`)}</td>
+    return `<tr${p?` class="click" data-p="${k}"`:""}><td class="mono">${esc(n)}</td><td>${p ? (idade > 7 ? `<span class="pill warn">atualizado há ${Math.floor(idade)} dias</span>` : `<span class="pill ok">em dia</span>`) : (S.fila.has(k) ? `<span class="pill warn">na fila de busca</span>` : naoPublico(n) ? `<span class="pill neu" title="O SIPAC respondeu &quot;Nenhum processo encontrado&quot; na consulta pública. Provavelmente é de acesso restrito ou sigiloso.">fora da consulta pública</span>` : `<span class="pill neu">aguardando busca</span>`)}</td>
     <td>${conf ? fd(conf,true) : ""}</td>${V() ? "" : `<td>${setoresDe(n).map(chip).join(" ")}</td>`}</tr>`; });
   const so = S.podeEscrever === false;
   const fila = [...S.fila.values()].sort((a,b)=> (a.solicitado_em||"") < (b.solicitado_em||"") ? 1 : -1);
@@ -848,7 +849,9 @@ function statusColetor(){
     <span class="note">Última: ${quando} · próxima por volta de ${prox}</span></div>
     <div class="row"><span class="pill ${st.erro_geral ? "crit" : falhas.length ? "warn" : "ok"}">${st.erro_geral ? "SIPAC inacessível" : `${st.verificados ?? st.atualizados ?? 0} de ${st.total||0} conferidos${st.alterados != null ? ` · ${st.alterados + (st.novos||0)} com mudança` : ""}${st.pulados_fora_do_foco ? ` · ${st.pulados_fora_do_foco} fora da PROPLAN (conferidos às 07h)` : ""}${st.pulados_encerrados ? ` · ${st.pulados_encerrados} encerrados (conferidos às segundas, 07h)` : ""}`}</span>
     ${S.fila.size ? `<span class="pill neu">${S.fila.size} na fila</span>` : ""}</div>
-    ${erroGeral}${falhas.slice(0,8).map(f=>`<div class="note"><span class="mono">${esc(f.numero)}</span>: ${esc(f.erro)}</div>`).join("")}</section>`;
+    ${erroGeral}${(() => { const np = falhas.filter(f => /não encontrado/i.test(f.erro||"")), outras = falhas.filter(f => !np.includes(f));
+      return (np.length ? `<div class="note">${np.length} processo(s) da lista não aparecem na consulta pública do SIPAC (provavelmente de acesso restrito ou sigiloso). Eles ficam marcados como “fora da consulta pública” na lista de acompanhamento.</div>` : "")
+        + outras.slice(0,8).map(f=>`<div class="note"><span class="mono">${esc(f.numero)}</span>: ${esc(f.erro)}</div>`).join(""); })()}</section>`;
 }
 async function salvarLista(){
   const nums = [...todosNums($("#lista").value).values()];
