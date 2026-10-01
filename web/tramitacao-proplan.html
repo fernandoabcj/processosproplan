@@ -1,0 +1,736 @@
+<title>Tramitação PROPLAN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+/* Layout: barra institucional fixa com abas; conteúdo em coluna única de até 1240px; painel → setores → estoque → alertas. */
+:root{
+  --bg:#f3f5f6; --surface:#ffffff; --surface2:#eef2f3; --fg:#18232a; --muted:#5a6b74; --line:#d9e1e4;
+  --accent:#0b5c6b; --accent-soft:#dcecef; --on-accent:#ffffff;
+  --warn:#9a5b00; --warn-soft:#fdf0d8; --crit:#b3261e; --crit-soft:#fbe4e2; --ok:#1d6b3a; --ok-soft:#e1f2e6;
+  --ext:#b9c4c9;
+  --s1:#1c6fa8; --s2:#7a4fb0; --s3:#b0611c; --s4:#2f8a57; --s5:#b0306b; --s6:#0b5c6b;
+  --font-body:"Public Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#11181c; --surface:#182227; --surface2:#1f2b31; --fg:#e4ebee; --muted:#93a4ad; --line:#2b3a41;
+  --accent:#5cc0d2; --accent-soft:#16363e; --on-accent:#0b1a1e;
+  --warn:#f0b65a; --warn-soft:#3a2c14; --crit:#f2867e; --crit-soft:#3d1c1a; --ok:#7fd39b; --ok-soft:#173222;
+  --ext:#46565e;
+  --s1:#6cb3e6; --s2:#b596e3; --s3:#e8a062; --s4:#72c995; --s5:#ec82b3; --s6:#5cc0d2; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11181c; --surface:#182227; --surface2:#1f2b31; --fg:#e4ebee; --muted:#93a4ad; --line:#2b3a41;
+  --accent:#5cc0d2; --accent-soft:#16363e; --on-accent:#0b1a1e;
+  --warn:#f0b65a; --warn-soft:#3a2c14; --crit:#f2867e; --crit-soft:#3d1c1a; --ok:#7fd39b; --ok-soft:#173222;
+  --ext:#46565e;
+  --s1:#6cb3e6; --s2:#b596e3; --s3:#e8a062; --s4:#72c995; --s5:#ec82b3; --s6:#5cc0d2; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg)}
+body{font:14px/1.5 var(--font-body);margin:0}
+.wrap{max-width:1240px;margin:0 auto;padding-inline:16px}
+header.top{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+.top .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:8px 24px;padding-block:12px 0}
+.brand{display:flex;flex-direction:column;gap:0;min-width:0}
+.brand b{font-weight:800;font-size:17px;letter-spacing:-.01em}
+.brand span{color:var(--muted);font-size:12px}
+nav.tabs{display:flex;gap:4px;overflow-x:auto;margin-left:auto}
+nav.tabs button{font:600 13px var(--font-body);background:none;border:0;color:var(--muted);padding:10px 12px;border-bottom:3px solid transparent;cursor:pointer;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+nav.tabs button:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+main{padding-block:20px 48px;display:flex;flex-direction:column;gap:20px}
+h1,h2,h3{text-wrap:balance;margin:0}
+h2{font-size:16px;font-weight:700}
+h3{font-size:14px;font-weight:700}
+.sec{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.sec-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px}
+.note{color:var(--muted);font-size:12px}
+.banner{border:1px dashed var(--warn);background:var(--warn-soft);color:var(--fg);border-radius:8px;padding:10px 14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.banner b{color:var(--warn)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.kpi .v{font:600 28px/1.1 var(--font-mono);font-variant-numeric:tabular-nums}
+.kpi .l{color:var(--muted);font-size:12px}
+.kpi.crit .v{color:var(--crit)} .kpi.warn .v{color:var(--warn)}
+.tw{overflow-x:auto;min-width:0}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;cursor:pointer;user-select:none}
+th.ns{cursor:default}
+td.n,th.n{text-align:right}
+td.mono,.mono{font-family:var(--font-mono);font-size:12.5px}
+tbody tr.click{cursor:pointer}
+tbody tr.click:hover td{background:var(--surface2)}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:1px 8px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap;border:1px solid var(--line);background:var(--surface2);color:var(--fg)}
+.chip i{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--c,var(--ext))}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap}
+.pill.crit{background:var(--crit-soft);color:var(--crit)} .pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.neu{background:var(--surface2);color:var(--muted)}
+.bar{height:8px;border-radius:4px;background:var(--accent);min-width:2px}
+.bartrack{background:var(--surface2);border-radius:4px;width:100%;min-width:60px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:20px}
+.btn{font:600 13px var(--font-body);border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:7px 12px;cursor:pointer}
+.btn.pri{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.btn.danger{color:var(--crit);border-color:var(--crit)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+input[type=search],input[type=text],input[type=number],textarea,select{font:14px var(--font-body);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 10px}
+input[type=search]{min-width:0;flex:1 1 240px;max-width:420px}
+textarea{width:100%;resize:vertical}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:28px 16px;text-align:center;background:var(--surface2);display:flex;flex-direction:column;gap:6px;align-items:center;cursor:text}
+.drop.on{border-color:var(--accent);background:var(--accent-soft)}
+.drop b{font-size:15px}
+.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.strip{display:flex;height:22px;border-radius:5px;overflow:hidden;border:1px solid var(--line);background:var(--surface2)}
+.strip div{min-width:3px;border-right:1px solid var(--surface);background:var(--c,var(--ext))}
+.legend{display:flex;flex-wrap:wrap;gap:6px}
+.det-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-start}
+.det-head .num{font:600 18px var(--font-mono)}
+dl.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px 20px;margin:0}
+dl.meta div{display:flex;flex-direction:column;min-width:0}
+dl.meta dt{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:700}
+dl.meta dd{margin:0;overflow-wrap:anywhere}
+tr.pp td{background:var(--accent-soft)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-weight:600;max-width:calc(100% - 32px);z-index:9}
+.cfg-grid{display:flex;flex-direction:column;gap:12px}
+.cfg-item{display:grid;grid-template-columns:110px 1fr 1fr 1.4fr;gap:8px;align-items:start}
+.cfg-item label{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em;display:flex;flex-direction:column;gap:3px}
+.cfg-item input,.cfg-item textarea{width:100%}
+@media (max-width:760px){.cfg-item{grid-template-columns:1fr 1fr}}
+.empty{color:var(--muted);padding:12px 0}
+.confirm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--crit-soft);padding:8px 12px;border-radius:6px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand"><b>Tramitação PROPLAN</b><span>Processos SIPAC/UFPB · PROPLAN, Secretaria, CODEOR, CODEINFO, CODECON, CODEPLAN</span></div>
+    <nav class="tabs" role="tablist" id="tabs">
+      <button role="tab" data-v="painel" aria-selected="true">Painel</button>
+      <button role="tab" data-v="processos" aria-selected="false">Processos</button>
+      <button role="tab" data-v="adicionar" aria-selected="false">Adicionar processos</button>
+      <button role="tab" data-v="setores" aria-selected="false">Setores e alertas</button>
+    </nav>
+  </div>
+</header>
+<main class="wrap" id="app"></main>
+<div class="toast" id="toast" hidden></div>
+<input type="file" id="arquivos" accept=".html,.htm,.txt" multiple hidden>
+
+<script>
+"use strict";
+/* ================================================================ utilidades */
+const $ = (s, el=document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const norm = s => String(s||"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ").trim().toUpperCase();
+const limpa = s => String(s||"").replace(/\s+/g," ").trim();
+const nf1 = new Intl.NumberFormat("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1});
+const n1 = x => nf1.format(x||0);
+const DIA = 86400000;
+const RE_PROC = /(?<!\d)(\d{5})\s*[.\-]?\s*(\d{6})\s*\/\s*(\d{4})\s*-?\s*(\d{2})(?!\d)/;
+const RE_PROC_G = new RegExp(RE_PROC.source, "g");
+const RE_DATA = /(\d{2})\/(\d{2})\/(\d{4})(?:\s+(?:às\s+)?(\d{1,2}):(\d{2})(?::(\d{2}))?)?/;
+const URL_SIPAC = "https://sipac.ufpb.br/public/jsp/processos/processo_consulta.jsf";
+
+function numProc(t){ const m = RE_PROC.exec(t||""); return m ? {fmt:`${m[1]}.${m[2]}/${m[3]}-${m[4]}`, chave:m.slice(1,5).join("")} : null; }
+function todosNums(t){ const out = new Map(); for (const m of String(t||"").matchAll(RE_PROC_G)) out.set(m.slice(1,5).join(""), `${m[1]}.${m[2]}/${m[3]}-${m[4]}`); return out; }
+function parseData(t){
+  const m = RE_DATA.exec(t||""); if(!m) return null;
+  const d = new Date(+m[3], +m[2]-1, +m[1], +(m[4]||0), +(m[5]||0), +(m[6]||0));
+  return isNaN(d) ? null : d;
+}
+const iso = d => d ? new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16) : null;
+const deIso = s => s ? new Date(s) : null;
+const fd = (d, hora) => { if(!d) return "—"; const p = n => String(n).padStart(2,"0");
+  let s = `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()}`;
+  if (hora && (d.getHours()||d.getMinutes())) s += ` ${p(d.getHours())}:${p(d.getMinutes())}`; return s; };
+const diasEntre = (a,b) => Math.max((b-a)/DIA, 0);
+
+/* Feriados nacionais (fixos e móveis), ponto facultativo de Carnaval e feriado municipal de João Pessoa (05/08). */
+function pascoa(y){const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),mes=Math.floor((h+l-7*m+114)/31),dia=((h+l-7*m+114)%31)+1;return new Date(y,mes-1,dia);}
+const _fer = new Map();
+function chaveDia(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
+function feriadosAno(y){
+  if (_fer.has(y)) return _fer.get(y);
+  const s = new Set(["01-01","04-21","05-01","08-05","09-07","10-12","11-02","11-15","11-20","12-25"].map(x=>`${y}-${x}`));
+  const p = pascoa(y); for (const off of [-48,-47,-2,60]) s.add(chaveDia(new Date(p.getFullYear(),p.getMonth(),p.getDate()+off)));
+  _fer.set(y,s); return s;
+}
+function diasUteis(a, b, extras){
+  if (!a || !b || b <= a) return 0;
+  let d = new Date(a.getFullYear(), a.getMonth(), a.getDate()+1); const fim = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+  let n = 0;
+  while (d <= fim){ const k = chaveDia(d); if (d.getDay()%6 !== 0 && !feriadosAno(d.getFullYear()).has(k) && !extras.has(k)) n++; d.setDate(d.getDate()+1); }
+  return n;
+}
+
+/* ================================================================ configuração de setores */
+const CFG_PADRAO = {
+  setores: [
+    {sigla:"CODEOR", nome:"Coordenação de Orçamento", codigos:[], padroes:["\\bCODEOR\\b","COORDENACAO DE ORCAMENTO"]},
+    {sigla:"CODEINFO", nome:"Coordenação de Informações", codigos:[], padroes:["\\bCODEINFO\\b","COORDENACAO DE INFORMAC"]},
+    {sigla:"CODECON", nome:"Coordenação de Convênios", codigos:[], padroes:["\\bCODECON\\b","COORDENACAO DE CONVENIOS"]},
+    {sigla:"CODEPLAN", nome:"Coordenação de Planejamento", codigos:[], padroes:["\\bCODEPLAN\\b","COORDENACAO DE PLANEJAMENTO"]},
+    {sigla:"SECRETARIA", nome:"Secretaria da PROPLAN", codigos:[], padroes:["SECRETARIA.*(PROPLAN|PRO-REITORIA DE PLANEJAMENTO)","PROPLAN.*SECRETARIA","\\bSEC[-/ ]?PROPLAN\\b"]},
+    {sigla:"PROPLAN", nome:"PROPLAN (Gabinete)", codigos:[], padroes:["\\bPROPLAN\\b","PRO-REITORIA DE PLANEJAMENTO"]},
+  ],
+  limite_parado: 15, limite_receb: 3, limite_passagens: 3, feriados_extras: [],
+};
+function compilarCfg(raw){
+  const c = JSON.parse(JSON.stringify(raw || CFG_PADRAO));
+  c.setores = (c.setores||[]).map((s,i) => ({...s, cor:`var(--s${(i%6)+1})`,
+    _rx:(s.padroes||[]).map(p=>{try{return new RegExp(p)}catch{return null}}).filter(Boolean)}));
+  c._fer = new Set((c.feriados_extras||[]).map(f => { const d = parseData(f); return d ? chaveDia(d) : f; }));
+  c._cache = new Map();
+  c.setorDe = u => {
+    if (!u) return null; if (c._cache.has(u)) return c._cache.get(u);
+    const cod = (/\((\d{2}(?:\.\d{2})+)\)/.exec(u)||[])[1]; const n = norm(u); let r = null;
+    for (const s of c.setores){ if ((cod && (s.codigos||[]).includes(cod)) || s._rx.some(rx=>rx.test(n))){ r = s.sigla; break; } }
+    c._cache.set(u, r); return r;
+  };
+  c.cor = sig => (c.setores.find(s=>s.sigla===sig)||{}).cor || "var(--ext)";
+  c.nome = sig => (c.setores.find(s=>s.sigla===sig)||{}).nome || sig;
+  return c;
+}
+
+/* ================================================================ leitura da página do SIPAC */
+function tipoColuna(t){
+  t = norm(t);
+  if (t.includes("URGENT")) return "urgente";
+  if (t.includes("RECEB")) return (t.includes("POR")||t.includes("USUARIO")||t.includes("RECEBEDOR")) ? "recebido_por" : "data_receb";
+  if (t.includes("ENVIADO POR")||t.includes("REMETENTE")||t.includes("USUARIO")) return "enviado_por";
+  if (t.includes("DESTINO")) return t.startsWith("DATA") ? "data_destino" : "destino";
+  if (t.includes("ORIGEM")) return t.startsWith("DATA") ? "data_envio" : "origem";
+  if (t.startsWith("DATA")||t.includes("ENVIO")) return "data_envio";
+  return null;
+}
+const semData = t => limpa(String(t||"").replace(/\d{2}\/\d{2}\/\d{4}(\s+\d{1,2}:\d{2}(:\d{2})?)?/g,""));
+
+/* Recebe "tabelas" como listas de linhas (cada linha = lista de células) e monta o processo. */
+function montarProcesso(tabelas, textoTotal){
+  const campos = {};
+  for (const tab of tabelas) for (const cel of tab){
+    for (let i=0;i<cel.length-1;i++){
+      const r = cel[i]; if (!r.endsWith(":") || r.length>60) continue;
+      const k = norm(r.slice(0,-1)); if (!(k in campos)) campos[k] = cel[i+1];
+    }
+  }
+  const campo = (...ks) => { for (const k of ks) if (k in campos) return campos[k];
+    for (const k of ks) for (const c in campos) if (c.startsWith(k)) return campos[c]; return ""; };
+
+  let movs = [];
+  achou: for (const tab of tabelas){
+    for (let i=0;i<tab.length;i++){
+      const cab = tab[i]; if (cab.length < 3) continue;
+      const mapa = {}; cab.forEach((t,idx) => { const k = tipoColuna(t); if (k && !(k in mapa)) mapa[k] = idx; });
+      if (!("origem" in mapa && "destino" in mapa)) continue;
+      const nmin = Math.max(...Object.values(mapa)) + 1;
+      const pega = (c,k) => (mapa[k] !== undefined && mapa[k] < c.length) ? c[mapa[k]] : "";
+      for (const c of tab.slice(i+1)){
+        if (c.length < nmin) continue;
+        const o = pega(c,"origem"), d = pega(c,"destino");
+        if (!o && !d) continue;
+        const env = parseData(pega(c,"data_envio")) || parseData(o); if (!env) continue;
+        let rec = parseData(pega(c,"data_receb")) || parseData(pega(c,"data_destino"));
+        if (!rec && !("data_receb" in mapa)) rec = parseData(d);
+        movs.push({envio:iso(env), origem:semData(o), destino:semData(d), enviado_por:pega(c,"enviado_por"),
+          receb:iso(rec), recebido_por:pega(c,"recebido_por"), urgente:["SIM","S","X"].includes(norm(pega(c,"urgente")))});
+      }
+      if (movs.length) break achou;
+    }
+  }
+  if (movs.length > 1 && movs[0].envio > movs[movs.length-1].envio) movs.reverse();
+  movs = movs.map((m,i)=>({...m,_i:i})).sort((a,b)=> a.envio < b.envio ? -1 : a.envio > b.envio ? 1 : a._i-b._i).map(({_i,...m})=>m);
+
+  const num = numProc(campo("PROCESSO","NUMERO DO PROCESSO","NUMERO")) || numProc(textoTotal);
+  if (!num) throw new Error("Não encontrei o número do processo no conteúdo colado. Copie a página de detalhes do processo (a que mostra as movimentações).");
+  let interessados = [];
+  for (const tab of tabelas){
+    const t0 = norm((tab._titulo||"") + " " + (tab[0]||[]).join(" "));
+    if (t0.includes("INTERESSAD") || (t0.includes("NOME") && t0.includes("IDENTIFICADOR"))){
+      interessados = tab.slice(1).map(c => c.filter(Boolean).join(" - ")).filter(Boolean).slice(0,10);
+      if (interessados.length) break;
+    }
+  }
+  const assunto = ("ASSUNTO" in campos) ? campos["ASSUNTO"] : "";
+  return {
+    numero:num.fmt, chave:num.chave, assunto, assunto_detalhado:campo("ASSUNTO DETALHADO"),
+    natureza:campo("NATUREZA","NATUREZA DO PROCESSO"), status:campo("STATUS","SITUACAO"),
+    autuacao:iso(parseData(campo("DATA DE AUTUACAO","AUTUADO EM","DATA DE CADASTRO"))),
+    origem:campo("UNIDADE DE ORIGEM","UNIDADE ORIGEM"), interessados, movs,
+  };
+}
+
+function lerHTML(html){
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  doc.querySelectorAll("script,style,noscript").forEach(e=>e.remove());
+  const tabelas = [...doc.querySelectorAll("table")].map(t => {
+    const linhas = [...t.querySelectorAll("tr")].filter(tr => tr.closest("table") === t && !tr.querySelector("table"))
+      .map(tr => [...tr.children].filter(c=>/^T[DH]$/.test(c.tagName)).map(c => limpa(c.textContent)));
+    const cap = t.querySelector("caption"); linhas._titulo = cap ? cap.textContent : "";
+    let prev = t.previousElementSibling; if (!linhas._titulo && prev) linhas._titulo = prev.textContent.slice(0,80);
+    return linhas;
+  });
+  const texto = doc.body ? doc.body.textContent : html;
+  if (!tabelas.some(t=>t.length)) return lerTexto(doc.body ? doc.body.innerText || texto : texto);
+  return montarProcesso(tabelas, texto);
+}
+function lerTexto(txt){
+  const linhas = String(txt).split(/\r?\n/).map(l => l.split("\t").map(limpa)).filter(c => c.some(Boolean));
+  const extra = [];
+  for (const l of linhas){ if (l.length === 1){ const m = /^([^:]{2,60}:)\s*(.+)$/.exec(l[0]); if (m) extra.push([m[1], m[2]]); } }
+  return montarProcesso([linhas, extra], txt);
+}
+
+/* ================================================================ análise */
+const ENCERRADO = ["ARQUIV","CONCLU","FINALIZ","ENCERRAD","CANCELAD"];
+function analisar(p, cfg, ref){
+  const status = norm(p.status), encerrado = ENCERRADO.some(s=>status.includes(s));
+  const movs = (p.movs||[]).map(m => ({...m, envio:deIso(m.envio), receb:deIso(m.receb)})).filter(m=>m.envio);
+  const perms = [];
+  const nova = (unidade, inicio, receb, fim, veio, foi) => {
+    const f = fim || ref;
+    perms.push({unidade, setor:cfg.setorDe(unidade), inicio, receb, fim, veio, foi:foi||"",
+      dias:diasEntre(inicio,f), uteis:diasUteis(inicio,f,cfg._fer),
+      aguard: receb ? diasEntre(inicio,receb) : (fim ? 0 : diasEntre(inicio,ref))});
+  };
+  const aut = deIso(p.autuacao);
+  if (movs.length){
+    const ini = aut || movs[0].envio;
+    if (ini <= movs[0].envio) nova(movs[0].origem || p.origem, ini, ini, movs[0].envio, "(autuação)", movs[0].destino);
+    movs.forEach((m,i) => { const px = movs[i+1]; nova(m.destino, m.envio, m.receb, px ? px.envio : null, m.origem, px ? px.destino : ""); });
+  } else if (aut) nova(p.origem, aut, aut, null, "(autuação)");
+
+  const a = {p, perms, encerrado, alertas:[], porSetor:{}, uteisSetor:{}, passagens:{}, totalProplan:0};
+  if (!perms.length){ a.alertas.push("Sem movimentações legíveis"); return a; }
+  const at = perms[perms.length-1];
+  Object.assign(a, {unidade:at.unidade, setor:at.setor, diasAtual:at.dias, uteisAtual:at.uteis,
+    aguardando: !at.receb && !encerrado, tramitacao:diasEntre(perms[0].inicio, ref), atual:at});
+  a.naProplan = !!at.setor && !encerrado;
+  for (const x of perms){ if (!x.setor) continue;
+    a.porSetor[x.setor] = (a.porSetor[x.setor]||0) + x.dias; a.uteisSetor[x.setor] = (a.uteisSetor[x.setor]||0) + x.uteis;
+    a.passagens[x.setor] = (a.passagens[x.setor]||0) + 1; a.totalProplan += x.dias;
+    if (!a.entradaProplan) a.entradaProplan = x.inicio; }
+  a.passou = Object.keys(a.passagens).length > 0;
+  if (a.naProplan){
+    if (a.diasAtual >= cfg.limite_parado) a.alertas.push({nivel:"crit", t:`Parado há ${Math.floor(a.diasAtual)} dias em ${a.setor}`});
+    if (a.aguardando && a.diasAtual >= cfg.limite_receb) a.alertas.push({nivel:"warn", t:`Aguardando recebimento em ${a.setor} há ${Math.floor(a.diasAtual)} dias`});
+  }
+  for (const [s,n] of Object.entries(a.passagens)) if (n >= cfg.limite_passagens) a.alertas.push({nivel:"warn", t:`${n} passagens por ${s} (idas e vindas)`});
+  const semReceb = perms.find(x => x.setor && x.fim && !x.receb);
+  if (semReceb) a.alertas.push({nivel:"neu", t:`Saiu de ${semReceb.setor} em ${fd(semReceb.fim)} sem registro de recebimento`});
+  return a;
+}
+const med = v => { if(!v.length) return 0; const s=[...v].sort((a,b)=>a-b), m=s.length>>1; return s.length%2 ? s[m] : (s[m-1]+s[m])/2; };
+const media = v => v.length ? v.reduce((a,b)=>a+b,0)/v.length : 0;
+function consolidar(as, cfg){
+  const st = Object.fromEntries(cfg.setores.map(s=>[s.sigla,{sigla:s.sigla,nome:s.nome,cor:s.cor,procs:0,pass:0,dias:[],aguard:[],estoque:0,idade:[],acima:0}]));
+  const entradas = new Map(), saidas = new Map(); const inc = (m,k)=>m.set(k,(m.get(k)||0)+1);
+  for (const a of as){
+    const vistos = new Set();
+    for (const x of a.perms){
+      if (x.setor && st[x.setor]){ const s = st[x.setor]; s.pass++; vistos.add(x.setor); if (x.fim) s.dias.push(x.dias); if (x.receb) s.aguard.push(x.aguard); }
+      const so = cfg.setorDe(x.veio);
+      if (x.veio && x.veio !== "(autuação)"){ if (x.setor && !so) inc(entradas, x.veio); if (so && !x.setor) inc(saidas, x.unidade); }
+    }
+    vistos.forEach(s => st[s].procs++);
+    if (a.naProplan && st[a.setor]){ const s = st[a.setor]; s.estoque++; s.idade.push(a.diasAtual); if (a.diasAtual >= cfg.limite_parado) s.acima++; }
+  }
+  return {setores:Object.values(st), entradas, saidas};
+}
+
+/* ================================================================ exemplos (fictícios, só exibidos enquanto não há dados reais) */
+const EXEMPLOS = (() => {
+  const hoje = new Date(); const d = (dias, h=9) => { const x = new Date(hoje); x.setDate(x.getDate()-dias); x.setHours(h,0,0,0); return iso(x); };
+  return [
+    {numero:"23074.900001/2026-01", chave:"23074900001202601", assunto:"ORÇAMENTO: DESCENTRALIZAÇÃO DE CRÉDITO (TED)", status:"ATIVO",
+     autuacao:d(29), origem:"CENTRO DE CIENCIAS EXATAS E DA NATUREZA (11.00.48)", interessados:[], movs:[
+      {envio:d(26,14), origem:"CENTRO DE CIENCIAS EXATAS E DA NATUREZA (11.00.48)", destino:"SECRETARIA DA PRÓ-REITORIA DE PLANEJAMENTO (11.00.20.01)", receb:d(23,10)},
+      {envio:d(16), origem:"SECRETARIA DA PRÓ-REITORIA DE PLANEJAMENTO (11.00.20.01)", destino:"PRÓ-REITORIA DE PLANEJAMENTO E DESENVOLVIMENTO (11.00.20)", receb:d(15,8)},
+      {envio:d(6,10), origem:"PRÓ-REITORIA DE PLANEJAMENTO E DESENVOLVIMENTO (11.00.20)", destino:"COORDENAÇÃO DE ORÇAMENTO (11.00.20.02)", receb:null}]},
+    {numero:"23074.900002/2026-02", chave:"23074900002202602", assunto:"CONVÊNIO COM PREFEITURA MUNICIPAL", status:"ARQUIVADO",
+     autuacao:d(205), origem:"GABINETE DA REITORIA (11.00.01)", interessados:[], movs:[
+      {envio:d(203), origem:"GABINETE DA REITORIA (11.00.01)", destino:"PROPLAN - SECRETARIA (11.00.20.01)", receb:d(203,11)},
+      {envio:d(202), origem:"PROPLAN - SECRETARIA (11.00.20.01)", destino:"COORDENAÇÃO DE CONVÊNIOS (11.00.20.04)", receb:d(199)},
+      {envio:d(178), origem:"COORDENAÇÃO DE CONVÊNIOS (11.00.20.04)", destino:"PROCURADORIA FEDERAL (11.00.05)", receb:d(177)},
+      {envio:d(164), origem:"PROCURADORIA FEDERAL (11.00.05)", destino:"COORDENAÇÃO DE CONVÊNIOS (11.00.20.04)", receb:d(162)},
+      {envio:d(154), origem:"COORDENAÇÃO DE CONVÊNIOS (11.00.20.04)", destino:"ARQUIVO CENTRAL (11.00.09)", receb:d(150)}]},
+    {numero:"23074.900003/2026-03", chave:"23074900003202603", assunto:"PLANEJAMENTO: PDI – INDICADORES 2026", status:"ATIVO",
+     autuacao:d(48), origem:"PRÓ-REITORIA DE GRADUAÇÃO (11.00.10)", interessados:[], movs:[
+      {envio:d(46), origem:"PRÓ-REITORIA DE GRADUAÇÃO (11.00.10)", destino:"SECRETARIA DA PRÓ-REITORIA DE PLANEJAMENTO (11.00.20.01)", receb:d(45)},
+      {envio:d(44), origem:"SECRETARIA DA PRÓ-REITORIA DE PLANEJAMENTO (11.00.20.01)", destino:"COORDENAÇÃO DE INFORMAÇÕES (11.00.20.03)", receb:d(41)},
+      {envio:d(30), origem:"COORDENAÇÃO DE INFORMAÇÕES (11.00.20.03)", destino:"COORDENAÇÃO DE PLANEJAMENTO (11.00.20.05)", receb:d(29)}]},
+  ];
+})();
+
+/* ================================================================ estado e armazenamento */
+const S = { view:"painel", reais:new Map(), carregou:false, db:null, user:null, uid:null, podeEscrever:null, podeAdmin:false,
+  cfgRaw:CFG_PADRAO, cfg:compilarCfg(CFG_PADRAO), lista:[], sel:null, busca:"", filtroSetor:"", filtroSit:"", confirmar:null, ordem:{} };
+
+function dados(){ return S.reais.size ? [...S.reais.values()] : EXEMPLOS; }
+const ehExemplo = () => S.reais.size === 0;
+function analises(){ const ref = new Date(); return dados().map(p => analisar(p, S.cfg, ref)); }
+
+let _t; function toast(msg){ const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(_t); _t = setTimeout(()=>t.hidden=true, 4200); }
+
+async function salvarProcesso(p){
+  const doc = {...p, atualizado_em:new Date().toISOString(), atualizado_por:S.uid || null};
+  if (S.db){
+    try { await S.db.collection("processos").doc(p.chave).set(doc); }
+    catch(e){
+      if (e && e.code === "invalid_argument"){ S.podeEscrever = false; throw new Error("Você não tem permissão para gravar nesta ferramenta (acesso somente leitura)."); }
+      if (e && e.code === "quota_exceeded") throw new Error("O limite de armazenamento foi atingido. Remova processos antigos.");
+      throw new Error("Não foi possível salvar agora. Tente de novo em instantes.");
+    }
+  } else { S.reais.set(p.chave, doc); render(); }
+}
+async function removerProcesso(chave){
+  if (S.db){ try { await S.db.collection("processos").doc(chave).delete(); } catch { toast("Não foi possível remover."); return; } }
+  else { S.reais.delete(chave); }
+  S.sel = null; render(); toast("Processo removido.");
+}
+
+async function importar(conteudos){
+  let ok = 0; const erros = [];
+  for (const {html, texto, nome} of conteudos){
+    try {
+      const p = html ? lerHTML(html) : lerTexto(texto);
+      if (!p.movs.length) throw new Error(`${p.numero}: nenhuma movimentação encontrada. Copie a página completa de detalhes do processo.`);
+      await salvarProcesso(p); ok++; S.ultimo = p.chave;
+    } catch(e){ erros.push((nome ? nome + ": " : "") + e.message); }
+  }
+  S.erros = erros;
+  if (ok) toast(ok === 1 ? `Processo ${S.reais.get(S.ultimo)?.numero || ""} salvo.` : `${ok} processos salvos.`);
+  else if (erros.length) toast("Nada foi salvo. Veja o motivo abaixo.");
+  render();
+}
+
+/* ================================================================ componentes */
+function chip(sig){ if (!sig) return ""; return `<span class="chip" style="--c:${S.cfg.cor(sig)}"><i></i>${esc(sig)}</span>`; }
+function sitPill(a){
+  if (a.encerrado) return `<span class="pill neu">${esc(a.p.status||"encerrado")}</span>`;
+  if (a.aguardando) return `<span class="pill warn">aguardando recebimento</span>`;
+  return `<span class="pill ok">recebido</span>`;
+}
+function diasPill(a){
+  const d = a.diasAtual||0, c = S.cfg;
+  const cls = a.naProplan && d >= c.limite_parado ? "crit" : a.naProplan && d >= c.limite_parado*0.6 ? "warn" : "";
+  return cls ? `<span class="pill ${cls}">${n1(d)}</span>` : n1(d);
+}
+function strip(a){
+  const total = a.perms.reduce((s,x)=>s+Math.max(x.dias,0.05),0) || 1;
+  return `<div class="strip" role="img" aria-label="Linha do tempo de permanência por unidade">${a.perms.map(x =>
+    `<div style="flex:${Math.max(x.dias,0.05)/total};--c:${x.setor ? S.cfg.cor(x.setor) : "var(--ext)"}" title="${esc((x.setor?x.setor+" · ":"")+x.unidade)} — ${n1(x.dias)} dias"></div>`).join("")}</div>`;
+}
+function tabela(id, cab, linhas, vazio){
+  if (!linhas.length) return `<p class="empty">${esc(vazio||"Nada a mostrar.")}</p>`;
+  return `<div class="tw"><table id="${id}"><thead><tr>${cab.map(c=>`<th class="${c.n?"n":""} ${c.ns?"ns":""}">${esc(c.t)}</th>`).join("")}</tr></thead><tbody>${linhas.join("")}</tbody></table></div>`;
+}
+function bannerExemplo(){
+  if (!ehExemplo()) return "";
+  return `<div class="banner"><span><b>Dados de exemplo (fictícios).</b> Eles somem quando o primeiro processo real for adicionado.</span>
+    <button class="btn pri" data-ir="adicionar">Adicionar processos</button></div>`;
+}
+
+/* ================================================================ telas */
+function telaPainel(){
+  const as = analises(), cfg = S.cfg, c = consolidar(as, cfg);
+  const pp = as.filter(a=>a.passou), hoje = as.filter(a=>a.naProplan);
+  const parados = hoje.filter(a=>a.diasAtual >= cfg.limite_parado), aguard = hoje.filter(a=>a.aguardando);
+  const maxMed = Math.max(...c.setores.map(s=>media(s.dias)), 1);
+  const linhasSet = c.setores.map(s => `<tr>
+    <td>${chip(s.sigla)}<div class="note">${esc(s.nome)}</div></td>
+    <td class="n">${s.procs}</td><td class="n">${s.pass}</td>
+    <td class="n" data-v="${media(s.dias)}">${n1(media(s.dias))}</td>
+    <td style="width:18%"><div class="bartrack"><div class="bar" style="width:${100*media(s.dias)/maxMed}%;background:${s.cor}"></div></div></td>
+    <td class="n" data-v="${med(s.dias)}">${n1(med(s.dias))}</td><td class="n" data-v="${s.dias.length?Math.max(...s.dias):0}">${n1(s.dias.length?Math.max(...s.dias):0)}</td>
+    <td class="n" data-v="${media(s.aguard)}">${n1(media(s.aguard))}</td>
+    <td class="n">${s.estoque}</td><td class="n" data-v="${media(s.idade)}">${n1(media(s.idade))}</td>
+    <td class="n">${s.acima ? `<span class="pill crit">${s.acima}</span>` : "0"}</td></tr>`);
+  const est = hoje.sort((a,b)=>b.diasAtual-a.diasAtual).map(a => `<tr class="click" data-p="${a.p.chave}">
+    <td class="mono">${esc(a.p.numero)}</td><td>${esc(a.p.assunto)}</td><td>${chip(a.setor)}</td>
+    <td>${esc(a.atual.veio)}</td><td data-v="${+a.atual.inicio}">${fd(a.atual.inicio,true)}</td><td>${sitPill(a)}</td>
+    <td class="n" data-v="${a.diasAtual}">${diasPill(a)}</td><td class="n">${a.uteisAtual}</td><td class="n" data-v="${a.totalProplan}">${n1(a.totalProplan)}</td></tr>`);
+  const comAl = pp.filter(a=>a.alertas.length).sort((a,b)=>(b.naProplan-a.naProplan)||(b.diasAtual-a.diasAtual));
+  const al = comAl.map(a => `<tr class="click" data-p="${a.p.chave}"><td class="mono">${esc(a.p.numero)}</td>
+    <td>${a.naProplan ? chip(a.setor) : esc(a.unidade)}</td>
+    <td>${a.alertas.map(x=>`<div><span class="pill ${x.nivel}">${x.nivel==="crit"?"crítico":x.nivel==="warn"?"atenção":"registro"}</span> ${esc(x.t)}</div>`).join("")}</td></tr>`);
+  const lista = (m) => { const arr = [...m.entries()].sort((a,b)=>b[1]-a[1]).slice(0,12); const mx = arr[0]?.[1]||1;
+    return arr.map(([k,v]) => `<tr><td>${esc(k)}</td><td class="n">${v}</td><td style="width:35%"><div class="bartrack"><div class="bar" style="width:${100*v/mx}%"></div></div></td></tr>`); };
+  const mediaPP = pp.length ? media(pp.map(a=>a.totalProplan)) : 0;
+  return `${bannerExemplo()}
+  <div class="kpis">
+    <div class="kpi"><span class="v">${pp.length}</span><span class="l">processos que passaram pela PROPLAN</span></div>
+    <div class="kpi"><span class="v">${hoje.length}</span><span class="l">estão hoje em unidade da PROPLAN</span></div>
+    <div class="kpi ${parados.length?"crit":""}"><span class="v">${parados.length}</span><span class="l">parados há ${cfg.limite_parado} dias ou mais</span></div>
+    <div class="kpi ${aguard.length?"warn":""}"><span class="v">${aguard.length}</span><span class="l">aguardando recebimento</span></div>
+    <div class="kpi"><span class="v">${n1(mediaPP)}</span><span class="l">dias médios dentro da PROPLAN</span></div>
+  </div>
+  <section class="sec"><div class="sec-head"><h2>Desempenho por setor</h2><span class="note">Dias corridos. Média, mediana e máximo contam só passagens concluídas.</span></div>
+    ${tabela("t-set",[{t:"Setor"},{t:"Processos",n:1},{t:"Passagens",n:1},{t:"Média dias/passagem",n:1},{t:"",ns:1},{t:"Mediana",n:1},{t:"Máximo",n:1},{t:"Média até receber",n:1},{t:"Estoque hoje",n:1},{t:"Idade média",n:1},{t:`≥ ${cfg.limite_parado} dias`,n:1}], linhasSet)}
+  </section>
+  <section class="sec"><div class="sec-head"><h2>Onde está cada processo hoje</h2><span class="note">Clique em um processo para ver a movimentação completa.</span></div>
+    ${tabela("t-est",[{t:"Processo"},{t:"Assunto"},{t:"Setor"},{t:"Veio de"},{t:"Chegou em"},{t:"Situação"},{t:"Dias no setor",n:1},{t:"Dias úteis",n:1},{t:"Total PROPLAN",n:1}], est, "Nenhum processo está em unidade da PROPLAN neste momento.")}
+  </section>
+  <section class="sec"><h2>Alertas</h2>${tabela("t-al",[{t:"Processo"},{t:"Local atual"},{t:"Alertas",ns:1}], al, "Nenhum alerta.")}</section>
+  <section class="grid2">
+    <div class="sec"><h2>De onde chegam os processos</h2>${tabela("t-ent",[{t:"Unidade"},{t:"Qtde",n:1},{t:"",ns:1}], lista(c.entradas), "Sem registros.")}</div>
+    <div class="sec"><h2>Para onde saem da PROPLAN</h2>${tabela("t-sai",[{t:"Unidade"},{t:"Qtde",n:1},{t:"",ns:1}], lista(c.saidas), "Sem registros.")}</div>
+  </section>`;
+}
+
+function telaProcessos(){
+  const cfg = S.cfg; let as = analises();
+  const q = norm(S.busca);
+  as = as.filter(a => (!q || norm(a.p.numero+" "+a.p.assunto+" "+(a.unidade||"")+" "+(a.p.assunto_detalhado||"")).includes(q))
+    && (!S.filtroSetor || (S.filtroSetor === "_hoje" ? a.naProplan : a.passagens[S.filtroSetor]))
+    && (!S.filtroSit || (S.filtroSit==="alerta" ? a.alertas.length : S.filtroSit==="aguard" ? a.aguardando && a.naProplan : S.filtroSit==="enc" ? a.encerrado : !a.encerrado)));
+  as.sort((a,b)=> b.totalProplan - a.totalProplan);
+  const sig = cfg.setores.map(s=>s.sigla);
+  const linhas = as.map(a => `<tr class="click" data-p="${a.p.chave}"><td class="mono">${esc(a.p.numero)}</td><td>${esc(a.p.assunto)}</td>
+    <td>${a.naProplan ? chip(a.setor) : `<span class="note">${esc(a.unidade||"—")}</span>`} ${a.encerrado?`<span class="pill neu">${esc(a.p.status)}</span>`:""}</td>
+    <td class="n" data-v="${a.diasAtual||0}">${diasPill(a)}</td>
+    ${sig.map(s => `<td class="n" data-v="${a.porSetor[s]||0}">${a.porSetor[s]!==undefined ? n1(a.porSetor[s]) + (a.passagens[s]>1?` <span class="note">(${a.passagens[s]}×)</span>`:"") : `<span class="note">—</span>`}</td>`).join("")}
+    <td class="n" data-v="${a.totalProplan}"><b>${n1(a.totalProplan)}</b></td><td class="n" data-v="${a.tramitacao||0}">${n1(a.tramitacao)}</td>
+    <td class="n">${a.alertas.length ? `<span class="pill ${a.alertas.some(x=>x.nivel==="crit")?"crit":"warn"}">${a.alertas.length}</span>` : ""}</td></tr>`);
+  return `${bannerExemplo()}
+  ${S.sel ? telaDetalhe() : ""}
+  <section class="sec">
+    <div class="sec-head"><h2>Processos (${as.length})</h2>
+      <div class="row"><button class="btn" id="exp-xlsx">Baixar planilha Excel</button></div></div>
+    <div class="row">
+      <input type="search" id="busca" placeholder="Buscar por número, assunto ou unidade" value="${esc(S.busca)}" aria-label="Buscar">
+      <select id="f-setor" aria-label="Filtrar por setor"><option value="">Todos os setores</option><option value="_hoje" ${S.filtroSetor==="_hoje"?"selected":""}>Hoje na PROPLAN</option>
+        ${sig.map(s=>`<option value="${esc(s)}" ${S.filtroSetor===s?"selected":""}>Passou por ${esc(s)}</option>`).join("")}</select>
+      <select id="f-sit" aria-label="Filtrar por situação"><option value="">Qualquer situação</option>
+        <option value="ativo" ${S.filtroSit==="ativo"?"selected":""}>Em andamento</option><option value="enc" ${S.filtroSit==="enc"?"selected":""}>Arquivados / concluídos</option>
+        <option value="aguard" ${S.filtroSit==="aguard"?"selected":""}>Aguardando recebimento</option><option value="alerta" ${S.filtroSit==="alerta"?"selected":""}>Com alerta</option></select>
+    </div>
+    ${tabela("t-proc",[{t:"Processo"},{t:"Assunto"},{t:"Local atual"},{t:"Dias no local",n:1},...sig.map(s=>({t:s,n:1})),{t:"Total PROPLAN",n:1},{t:"Tramitação",n:1},{t:"Alertas",n:1}], linhas, "Nenhum processo com esses filtros.")}
+    <p class="note">Dias corridos acumulados em cada setor (soma das passagens; entre parênteses, quantas vezes passou). A cor do número de dias no local atual indica proximidade do limite de ${cfg.limite_parado} dias.</p>
+  </section>`;
+}
+
+function telaDetalhe(){
+  const p = dados().find(x=>x.chave===S.sel); if (!p) return "";
+  const a = analisar(p, S.cfg, new Date());
+  const linhas = a.perms.map(x => `<tr class="${x.setor?"pp":""}"><td>${chip(x.setor)} ${esc(x.unidade)}</td><td>${esc(x.veio)}</td>
+    <td>${fd(x.inicio,true)}</td><td>${x.receb ? fd(x.receb,true) : (x.fim ? "—" : `<span class="pill warn">não recebido</span>`)}</td>
+    <td>${x.fim ? fd(x.fim,true) : "<b>atual</b>"}</td><td class="n">${n1(x.dias)}</td><td class="n">${x.uteis}</td><td class="n">${n1(x.aguard)}</td></tr>`);
+  const setoresPassou = Object.keys(a.porSetor);
+  const quem = p.atualizado_por ? `<span data-uid="${esc(p.atualizado_por)}"></span>` : "";
+  return `<section class="sec" id="detalhe">
+    <div class="det-head"><div><div class="num">${esc(p.numero)}</div><div>${esc(p.assunto)}</div>
+      ${p.assunto_detalhado ? `<div class="note">${esc(p.assunto_detalhado)}</div>` : ""}</div>
+      <div class="row"><button class="btn" id="copiar">Copiar número</button>
+        <a class="btn" href="${URL_SIPAC}" target="_blank" rel="noopener">Abrir consulta no SIPAC</a>
+        ${!ehExemplo() && S.podeEscrever !== false ? `<button class="btn danger" id="remover">Remover</button>` : ""}
+        <button class="btn" id="fechar">Fechar</button></div></div>
+    ${S.confirmar === p.chave ? `<div class="confirm"><span>Remover ${esc(p.numero)} da ferramenta? Os dados no SIPAC não são afetados.</span>
+      <button class="btn danger" id="conf-sim">Remover</button><button class="btn" id="conf-nao">Cancelar</button></div>` : ""}
+    <dl class="meta">
+      <div><dt>Local atual</dt><dd>${a.setor ? chip(a.setor)+" " : ""}${esc(a.unidade||"—")}</dd></div>
+      <div><dt>Há quanto tempo</dt><dd>${n1(a.diasAtual)} dias (${a.uteisAtual||0} úteis) ${a.encerrado ? "" : sitPill(a)}</dd></div>
+      <div><dt>Tramitação total</dt><dd>${n1(a.tramitacao)} dias desde ${fd(a.perms[0]?.inicio)}</dd></div>
+      <div><dt>Total na PROPLAN</dt><dd>${n1(a.totalProplan)} dias</dd></div>
+      <div><dt>Status · Origem</dt><dd>${esc(p.status||"—")} · ${esc(p.origem||"—")}</dd></div>
+      <div><dt>Dados atualizados em</dt><dd>${p.atualizado_em ? fd(new Date(p.atualizado_em),true) : "exemplo"} ${quem}</dd></div>
+    </dl>
+    ${setoresPassou.length ? `<div class="legend">${setoresPassou.map(s=>`<span class="chip" style="--c:${S.cfg.cor(s)}"><i></i>${esc(s)}: ${n1(a.porSetor[s])} d · ${a.uteisSetor[s]} úteis${a.passagens[s]>1?` · ${a.passagens[s]}×`:""}</span>`).join("")}</div>` : ""}
+    ${strip(a)}
+    ${a.alertas.length ? `<div>${a.alertas.map(x=>`<div><span class="pill ${x.nivel}">${x.nivel==="crit"?"crítico":x.nivel==="warn"?"atenção":"registro"}</span> ${esc(x.t)}</div>`).join("")}</div>` : ""}
+    ${tabela("t-det",[{t:"Unidade",ns:1},{t:"Veio de",ns:1},{t:"Enviado em",ns:1},{t:"Recebido em",ns:1},{t:"Saiu em",ns:1},{t:"Dias",n:1,ns:1},{t:"Dias úteis",n:1,ns:1},{t:"Até receber",n:1,ns:1}], linhas)}
+  </section>`;
+}
+
+function telaAdicionar(){
+  const reais = S.reais;
+  const pend = S.lista.map(n => { const k = numProc(n)?.chave; const p = k && reais.get(k);
+    const idade = p?.atualizado_em ? (Date.now()-new Date(p.atualizado_em))/DIA : null;
+    return `<tr${p?` class="click" data-p="${k}"`:""}><td class="mono">${esc(n)}</td><td>${p ? (idade > 7 ? `<span class="pill warn">atualizado há ${Math.floor(idade)} dias</span>` : `<span class="pill ok">atualizado</span>`) : `<span class="pill neu">ainda não adicionado</span>`}</td>
+    <td>${p ? fd(new Date(p.atualizado_em),true) : ""}</td></tr>`; });
+  const so = S.podeEscrever === false;
+  return `<section class="sec">
+    <h2>Adicionar ou atualizar processos</h2>
+    ${so ? `<div class="banner"><span>Seu acesso a esta ferramenta é <b>somente leitura</b>. Peça ao responsável acesso de Colaborador para adicionar processos.</span></div>` : ""}
+    ${!S.db ? `<div class="banner"><span><b>Modo local:</b> o armazenamento compartilhado não está disponível nesta visualização. O que você colar aqui fica só nesta aba.</span></div>` : ""}
+    <ol class="steps">
+      <li>Abra a <a href="${URL_SIPAC}" target="_blank" rel="noopener">consulta pública de processos do SIPAC</a>, busque o processo e abra a tela de detalhes, que mostra as movimentações.</li>
+      <li>Selecione tudo (<b>Ctrl+A</b>) e copie (<b>Ctrl+C</b>).</li>
+      <li>Clique na área abaixo e cole (<b>Ctrl+V</b>). O processo é lido e salvo na hora. Colar de novo o mesmo processo atualiza as movimentações.</li>
+    </ol>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Área para colar ou soltar processos">
+      <b>Clique aqui e cole a página do processo (Ctrl+V)</b>
+      <span class="note">Também aceita arquivos .html salvos pelo navegador (Ctrl+S). Arraste vários de uma vez ou
+      <button class="btn" id="escolher" type="button">escolha arquivos</button></span>
+    </div>
+    ${S.erros?.length ? `<div>${S.erros.map(e=>`<div><span class="pill crit">não lido</span> ${esc(e)}</div>`).join("")}</div>` : ""}
+  </section>
+  <section class="sec">
+    <div class="sec-head"><h2>Lista de acompanhamento</h2><span class="note">Números que a equipe precisa manter atualizados. A lista é compartilhada.</span></div>
+    <textarea id="lista" rows="4" placeholder="Cole aqui números de processo, um por linha ou misturados com texto (ex.: a relação de processos da unidade no SIPAC)">${esc(S.lista.join("\n"))}</textarea>
+    <div class="row"><button class="btn pri" id="salvar-lista" ${so?"disabled":""}>Salvar lista</button><span class="note">${S.lista.length} processo(s) na lista</span></div>
+    ${tabela("t-lista",[{t:"Processo"},{t:"Situação na ferramenta"},{t:"Última atualização"}], pend, "A lista está vazia.")}
+  </section>`;
+}
+
+function telaSetores(){
+  const c = S.cfgRaw, pode = S.podeAdmin || !S.db;
+  const itens = c.setores.map((s,i) => `<div class="cfg-item" data-i="${i}">
+    <label>Sigla<input type="text" id="cs-sig-${i}" value="${esc(s.sigla)}" ${pode?"":"disabled"}></label>
+    <label>Nome<input type="text" id="cs-nome-${i}" value="${esc(s.nome)}" ${pode?"":"disabled"}></label>
+    <label>Códigos SIPAC (vírgula)<input type="text" id="cs-cod-${i}" value="${esc((s.codigos||[]).join(", "))}" placeholder="ex.: 11.00.20.02" ${pode?"":"disabled"}></label>
+    <label>Padrões do nome (um por linha)<textarea id="cs-pad-${i}" rows="2" ${pode?"":"disabled"}>${esc((s.padroes||[]).join("\n"))}</textarea></label></div>`).join("");
+  const unid = new Map(); for (const p of dados()) for (const m of p.movs||[]) for (const u of [m.origem,m.destino]) if (u) unid.set(u,(unid.get(u)||0)+1);
+  const linhasU = [...unid.entries()].sort((a,b)=>b[1]-a[1]).slice(0,60).map(([u,n]) => `<tr><td>${esc(u)}</td><td>${chip(S.cfg.setorDe(u)) || `<span class="note">externa</span>`}</td><td class="n">${n}</td></tr>`);
+  return `<section class="sec">
+    <div class="sec-head"><h2>Setores da PROPLAN</h2><span class="note">${pode ? "A primeira regra que casar define o setor. Deixe a PROPLAN (Gabinete) por último." : "Somente editores podem alterar estas regras."}</span></div>
+    <p class="note">O critério mais seguro é o <b>código SIPAC</b> da unidade, que aparece entre parênteses no nome, como em “COORDENAÇÃO DE ORÇAMENTO (11.00.20.02)”. Os padrões do nome são comparados em maiúsculas e sem acentos.</p>
+    <div class="cfg-grid">${itens}</div>
+    <h3>Alertas e prazos</h3>
+    <div class="row">
+      <label class="note">Parado no setor a partir de (dias) <input type="number" id="c-parado" min="1" value="${c.limite_parado}" ${pode?"":"disabled"}></label>
+      <label class="note">Aguardando recebimento a partir de (dias) <input type="number" id="c-receb" min="1" value="${c.limite_receb}" ${pode?"":"disabled"}></label>
+      <label class="note">Passagens repetidas a partir de <input type="number" id="c-pass" min="2" value="${c.limite_passagens}" ${pode?"":"disabled"}></label>
+    </div>
+    <label class="note">Feriados e recessos extras, além dos nacionais, Carnaval e 05/08 (dd/mm/aaaa, um por linha)
+      <textarea id="c-fer" rows="3" ${pode?"":"disabled"}>${esc((c.feriados_extras||[]).join("\n"))}</textarea></label>
+    ${pode ? `<div class="row"><button class="btn pri" id="salvar-cfg">Salvar regras</button><button class="btn" id="padrao-cfg">Restaurar padrão</button></div>` : ""}
+  </section>
+  <section class="sec"><div class="sec-head"><h2>Como as unidades estão sendo classificadas</h2><span class="note">Confira se cada unidade caiu no setor certo.</span></div>
+    ${tabela("t-unid",[{t:"Unidade (como aparece no SIPAC)"},{t:"Setor"},{t:"Movimentações",n:1}], linhasU)}</section>`;
+}
+
+/* ================================================================ render e eventos */
+function render(){
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.v === S.view)));
+  const app = $("#app"), foco = document.activeElement?.id, pos = foco && document.activeElement.selectionStart;
+  app.innerHTML = S.view === "painel" ? telaPainel() : S.view === "processos" ? telaProcessos() : S.view === "adicionar" ? telaAdicionar() : telaSetores();
+  if (foco && $("#"+foco)) { const el = $("#"+foco); el.focus(); try { if (pos != null) el.setSelectionRange(pos,pos); } catch {} }
+  resolverNomes();
+}
+async function resolverNomes(){
+  const els = [...document.querySelectorAll("[data-uid]")]; if (!els.length || !S.user) return;
+  try { const ps = await S.user.profiles(els.map(e=>e.dataset.uid)); els.forEach(e => { const n = ps[e.dataset.uid]?.name; e.textContent = n ? `por ${n}` : ""; }); } catch {}
+}
+function abrir(chave){ S.sel = chave; S.confirmar = null; S.view = "processos"; render(); $("#detalhe")?.scrollIntoView({block:"start"}); }
+
+document.addEventListener("click", async ev => {
+  const t = ev.target;
+  const tab = t.closest("#tabs button"); if (tab){ S.view = tab.dataset.v; S.erros = null; render(); return; }
+  const ir = t.closest("[data-ir]"); if (ir){ S.view = ir.dataset.ir; render(); return; }
+  const th = t.closest("th:not(.ns)"); if (th){ ordenar(th); return; }
+  const tr = t.closest("tr[data-p]"); if (tr && !t.closest("a,button")){ abrir(tr.dataset.p); return; }
+  switch (t.id){
+    case "fechar": S.sel = null; render(); break;
+    case "remover": S.confirmar = S.sel; render(); break;
+    case "conf-nao": S.confirmar = null; render(); break;
+    case "conf-sim": await removerProcesso(S.confirmar); S.confirmar = null; break;
+    case "copiar": { const p = dados().find(x=>x.chave===S.sel); try { await navigator.clipboard.writeText(p.numero); toast("Número copiado."); } catch { toast(p.numero); } break; }
+    case "escolher": $("#arquivos").click(); break;
+    case "drop": $("#drop").focus(); break;
+    case "salvar-lista": await salvarLista(); break;
+    case "salvar-cfg": { let raw; try { raw = lerCfgForm(); } catch(e){ toast(e.message); break; } await salvarCfg(raw); break; }
+    case "padrao-cfg": await salvarCfg(JSON.parse(JSON.stringify(CFG_PADRAO))); break;
+    case "exp-xlsx": await exportar(); break;
+  }
+});
+document.addEventListener("input", ev => {
+  if (ev.target.id === "busca"){ S.busca = ev.target.value; render(); }
+});
+document.addEventListener("change", ev => {
+  if (ev.target.id === "f-setor"){ S.filtroSetor = ev.target.value; render(); }
+  if (ev.target.id === "f-sit"){ S.filtroSit = ev.target.value; render(); }
+});
+document.addEventListener("paste", ev => {
+  if (S.view !== "adicionar" || ["lista","c-fer"].includes(document.activeElement?.id) || document.activeElement?.closest?.(".cfg-item")) return;
+  ev.preventDefault();
+  const html = ev.clipboardData.getData("text/html"), texto = ev.clipboardData.getData("text/plain");
+  if (!html && !texto){ toast("A área de transferência está vazia."); return; }
+  importar([html ? {html} : {texto}]);
+});
+$("#arquivos").addEventListener("change", async ev => { await lerArquivos(ev.target.files); ev.target.value = ""; });
+document.addEventListener("dragover", ev => { const d = $("#drop"); if (d && ev.dataTransfer?.types?.includes("Files")){ ev.preventDefault(); d.classList.add("on"); } });
+document.addEventListener("dragleave", ev => { if (ev.target.id === "drop") ev.target.classList.remove("on"); });
+document.addEventListener("drop", async ev => { const d = $("#drop"); if (!d) return; ev.preventDefault(); d.classList.remove("on"); await lerArquivos(ev.dataTransfer.files); });
+async function lerArquivos(files){
+  const arr = []; for (const f of files){ const txt = await lerArquivoTexto(f); arr.push(/<table|<html/i.test(txt) ? {html:txt, nome:f.name} : {texto:txt, nome:f.name}); }
+  if (arr.length) importar(arr);
+}
+async function lerArquivoTexto(f){
+  const buf = await f.arrayBuffer(); let txt = new TextDecoder("utf-8").decode(buf);
+  if (txt.includes("\uFFFD")) txt = new TextDecoder("iso-8859-1").decode(buf); // páginas antigas do SIPAC em Latin-1
+  return txt;
+}
+function ordenar(th){
+  const tb = th.closest("table").tBodies[0]; if (!tb) return; const i = [...th.parentNode.children].indexOf(th);
+  const asc = th.dataset.asc !== "1"; th.parentNode.querySelectorAll("th").forEach(x=>delete x.dataset.asc); th.dataset.asc = asc ? "1" : "0";
+  const val = r => { const c = r.cells[i]; return c?.dataset.v ?? c?.textContent.trim() ?? ""; };
+  [...tb.rows].sort((a,b) => { const x = val(a), y = val(b), nx = parseFloat(x), ny = parseFloat(y);
+    const r = (!isNaN(nx) && !isNaN(ny) && /^-?[\d.]+(e-?\d+)?$/.test(x) && /^-?[\d.]+(e-?\d+)?$/.test(y)) ? nx-ny : x.localeCompare(y,"pt-BR",{numeric:true}); return asc ? r : -r; })
+    .forEach(r => tb.appendChild(r));
+}
+
+async function salvarLista(){
+  const nums = [...todosNums($("#lista").value).values()];
+  if (S.db){ try { await S.db.doc("acompanhamento/lista").set({numeros:nums, atualizado_em:new Date().toISOString()}); toast(`Lista salva com ${nums.length} processo(s).`); }
+    catch(e){ toast(e?.code==="invalid_argument" ? "Sem permissão para alterar a lista." : "Não foi possível salvar a lista."); } }
+  else { S.lista = nums; render(); toast(`Lista com ${nums.length} processo(s) (somente nesta aba).`); }
+}
+function lerCfgForm(){
+  const setores = S.cfgRaw.setores.map((_,i) => ({ sigla:limpa($(`#cs-sig-${i}`).value).toUpperCase(), nome:limpa($(`#cs-nome-${i}`).value),
+    codigos:$(`#cs-cod-${i}`).value.split(/[,;\s]+/).map(limpa).filter(Boolean),
+    padroes:$(`#cs-pad-${i}`).value.split("\n").map(s=>s.trim()).filter(Boolean) })).filter(s=>s.sigla);
+  for (const s of setores) for (const p of s.padroes){ try { new RegExp(p); } catch { throw new Error(`Padrão inválido em ${s.sigla}: ${p}`); } }
+  return { setores, limite_parado:+$("#c-parado").value||15, limite_receb:+$("#c-receb").value||3, limite_passagens:+$("#c-pass").value||3,
+    feriados_extras:$("#c-fer").value.split("\n").map(limpa).filter(Boolean) };
+}
+async function salvarCfg(raw){
+  if (S.db){ try { await S.db.doc("config/setores").set(raw); toast("Regras salvas."); }
+    catch(e){ toast(e?.code==="invalid_argument" ? "Somente editores podem alterar as regras." : "Não foi possível salvar as regras."); } }
+  else { aplicarCfg(raw); toast("Regras aplicadas (somente nesta aba)."); }
+}
+function aplicarCfg(raw){ S.cfgRaw = raw && raw.setores?.length ? raw : CFG_PADRAO; S.cfg = compilarCfg(S.cfgRaw); render(); }
+
+async function exportar(){
+  if (!window.XLSX){ toast("A biblioteca de planilhas não carregou. Recarregue a página."); return; }
+  const as = analises(), cfg = S.cfg, sig = cfg.setores.map(s=>s.sigla), r2 = x => Math.round((x||0)*100)/100;
+  const c = consolidar(as, cfg);
+  const wb = XLSX.utils.book_new();
+  const add = (nome, linhas) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(linhas), nome);
+  add("Resumo por setor", c.setores.map(s => ({"Setor":s.sigla,"Nome":s.nome,"Processos":s.procs,"Passagens":s.pass,"Média dias/passagem":r2(media(s.dias)),
+    "Mediana":r2(med(s.dias)),"Máximo":r2(s.dias.length?Math.max(...s.dias):0),"Média até receber":r2(media(s.aguard)),"Estoque hoje":s.estoque,
+    "Idade média estoque":r2(media(s.idade)),[`Estoque >= ${cfg.limite_parado} dias`]:s.acima})));
+  add("Processos", as.map(a => Object.assign({"Processo":a.p.numero,"Assunto":a.p.assunto,"Status":a.p.status,"Autuação":fd(deIso(a.p.autuacao)),
+    "Unidade atual":a.unidade||"","Setor atual":a.setor||"","Aguardando recebimento":a.aguardando?"SIM":"NÃO","Dias no local atual":r2(a.diasAtual),"Dias úteis no local atual":a.uteisAtual||0},
+    Object.fromEntries(sig.map(s=>[`Dias ${s}`, r2(a.porSetor[s])])), Object.fromEntries(sig.map(s=>[`Passagens ${s}`, a.passagens[s]||0])),
+    {"Total dias PROPLAN":r2(a.totalProplan),"Tramitação total (dias)":r2(a.tramitacao),"Alertas":a.alertas.map(x=>x.t||x).join(" | ")})));
+  add("Permanências", as.flatMap(a => a.perms.map((x,i) => ({"Processo":a.p.numero,"Seq":i+1,"Unidade":x.unidade,"Setor PROPLAN":x.setor||"","Veio de":x.veio,"Foi para":x.foi,
+    "Enviado em":fd(x.inicio,true),"Recebido em":fd(x.receb,true),"Saiu em":x.fim?fd(x.fim,true):"atual","Dias":r2(x.dias),"Dias úteis":x.uteis,"Dias até receber":r2(x.aguard)}))));
+  add("Movimentações", dados().flatMap(p => (p.movs||[]).map((m,i) => ({"Processo":p.numero,"Seq":i+1,"Enviado em":fd(deIso(m.envio),true),"Origem":m.origem,"Destino":m.destino,
+    "Enviado por":m.enviado_por||"","Recebido em":fd(deIso(m.receb),true),"Recebido por":m.recebido_por||"","Urgente":m.urgente?"SIM":""}))));
+  const buf = XLSX.write(wb, {bookType:"xlsx", type:"array"});
+  const nome = `tramitacao_proplan_${chaveDia(new Date())}.xlsx`;
+  const dl = window.claude?.use ? await window.claude.use("downloads").catch(()=>null) : null;
+  if (!dl){ toast("Download indisponível nesta visualização."); return; }
+  try { await dl.save({filename:nome, data:new Blob([buf])}); }
+  catch(e){ if (e?.code !== "declined") toast(e?.code === "rate_limited" ? "Aguarde um instante e tente de novo." : "Não foi possível gerar o download."); }
+}
+
+/* ================================================================ inicialização */
+render();
+(async () => {
+  if (!window.claude?.use) return;
+  const [db, user] = await Promise.all([window.claude.use("db").catch(()=>null), window.claude.use("user").catch(()=>null)]);
+  S.user = user;
+  if (user){ S.uid = await user.id(); S.podeAdmin = await user.canEdit(); const w = await user.can("data.write"); if (w === false) S.podeEscrever = false; }
+  if (!db){ render(); return; }
+  S.db = db;
+  db.collection("processos").onSnapshot(snap => {
+    S.reais = new Map(snap.docs.map(d => [d.id, d.data()])); S.carregou = true; render();
+  }, () => toast("Conexão com os dados perdida. Recarregue a página."));
+  db.doc("config/setores").onSnapshot(s => aplicarCfg(s.exists ? s.data() : null), ()=>{});
+  db.doc("acompanhamento/lista").onSnapshot(s => { S.lista = s.exists ? (s.data().numeros||[]) : []; if (S.view === "adicionar" && document.activeElement?.id !== "lista") render(); }, ()=>{});
+  render();
+})();
+</script>
