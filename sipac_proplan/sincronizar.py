@@ -83,7 +83,7 @@ def sincronizar(numeros: list[NumeroProcesso], cliente: SipacClient, saida: Path
 # ---------------------------------------------------------------- rotina agendada
 
 _CAMPOS_VOLATEIS = {"atualizado_em", "atualizado_por", "fonte"}
-_ENCERRADO = ("ARQUIV", "CONCLU", "FINALIZ", "ENCERRAD", "CANCELAD")
+_ENCERRADO = ("ARQUIV", "CONCLU", "FINALIZ", "ENCERRAD", "CANCELAD", "APENSAD", "ANEXAD")
 
 
 def _ler_json(p: Path) -> dict | None:

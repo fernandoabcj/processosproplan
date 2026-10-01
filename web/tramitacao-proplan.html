@@ -303,7 +303,7 @@ function lerTexto(txt){
 }
 
 /* ================================================================ análise */
-const ENCERRADO = ["ARQUIV","CONCLU","FINALIZ","ENCERRAD","CANCELAD"];
+const ENCERRADO = ["ARQUIV","CONCLU","FINALIZ","ENCERRAD","CANCELAD","APENSAD","ANEXAD"];
 function analisar(p, cfg, ref){
   const status = norm(p.status), encerrado = ENCERRADO.some(s=>status.includes(s));
   const movs = (p.movs||[]).map(m => ({...m, envio:deIso(m.envio), receb:deIso(m.receb)})).filter(m=>m.envio);
@@ -444,7 +444,18 @@ async function gravarLista(por){
 
 function dados(){ return S.reais.size ? [...S.reais.values()] : EXEMPLOS; }
 const ehExemplo = () => S.reais.size === 0;
-function analises(){ const ref = new Date(); return dados().map(p => enriquecer(analisar(p, S.cfg, ref))); }
+/* Análises guardadas por documento e minuto: com centenas de processos, recalcular tudo
+   a cada tecla na busca deixaria a página lenta. */
+const _cache = new Map(); let _cacheMin = 0, _cacheCfg = null;
+function analises(){
+  const agora = new Date(), min = Math.floor(agora / 60000);
+  if (min !== _cacheMin || _cacheCfg !== S.cfg){ _cache.clear(); _cacheMin = min; _cacheCfg = S.cfg; }
+  return dados().map(p => {
+    let c = _cache.get(p.chave);
+    if (!c || c.doc !== p){ c = {doc:p, a:analisar(p, S.cfg, agora)}; _cache.set(p.chave, c); }
+    return enriquecer(c.a);
+  });
+}
 
 let _t; function toast(msg){ const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(_t); _t = setTimeout(()=>t.hidden=true, 4200); }
 

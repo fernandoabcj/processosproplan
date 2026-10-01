@@ -21,7 +21,7 @@ from .config import Config
 from .parser import Processo
 from .util import dias_corridos, dias_uteis, normalizar
 
-_STATUS_ENCERRADO = ("ARQUIV", "CONCLU", "FINALIZ", "ENCERRAD", "CANCELAD")
+_STATUS_ENCERRADO = ("ARQUIV", "CONCLU", "FINALIZ", "ENCERRAD", "CANCELAD", "APENSAD", "ANEXAD")
 
 
 @dataclass
