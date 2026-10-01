@@ -172,6 +172,18 @@ def cmd_sincronizar(args) -> int:
     return 0
 
 
+def cmd_rotina(args) -> int:
+    from datetime import datetime as _dt
+
+    from .sincronizar import rotina
+
+    modo = "imediato" if args.imediato else "agendado"
+    encerrados = args.incluir_encerrados or (modo == "agendado" and _dt.now().hour <= 7)
+    plano = rotina(Path(args.db), modo, encerrados, _cliente(args), Path(args.saida_json))
+    print(json.dumps({k: (len(v) if isinstance(v, list) else v) for k, v in plano.items()}, ensure_ascii=False))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="sipac_proplan",
@@ -217,6 +229,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--saida-json", default="dados/sync", help="pasta de saída (processos/*.json e status.json)")
     p.add_argument("--debug", action="store_true", help="grava as páginas intermediárias em dados/debug")
     p.set_defaults(func=cmd_sincronizar)
+
+    p = sub.add_parser("rotina", help="execução da rotina: planeja, consulta o SIPAC e separa só o que mudou")
+    p.add_argument("--db", default="dados/db", help="cópia do banco do artifact (ArtifactData com out_dir)")
+    p.add_argument("--saida-json", default="dados/sync")
+    p.add_argument("--imediato", action="store_true", help="só as solicitações pendentes")
+    p.add_argument("--incluir-encerrados", action="store_true",
+                   help="também confere arquivados/concluídos (automático na execução das 07h)")
+    p.add_argument("--debug", action="store_true")
+    p.set_defaults(func=cmd_rotina)
 
     p = sub.add_parser("processo", help="mostra no terminal a análise de um processo")
     p.add_argument("numero")

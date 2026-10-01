@@ -78,3 +78,74 @@ def sincronizar(numeros: list[NumeroProcesso], cliente: SipacClient, saida: Path
     }
     (saida / "status.json").write_text(json.dumps(status, ensure_ascii=False, indent=1), encoding="utf-8")
     return status
+
+
+# ---------------------------------------------------------------- rotina agendada
+
+_CAMPOS_VOLATEIS = {"atualizado_em", "atualizado_por", "fonte"}
+_ENCERRADO = ("ARQUIV", "CONCLU", "FINALIZ", "ENCERRAD", "CANCELAD")
+
+
+def _ler_json(p: Path) -> dict | None:
+    try:
+        d = json.loads(p.read_text(encoding="utf-8"))
+        return d.get("data", d) if isinstance(d, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def _essencial(doc: dict) -> dict:
+    return {k: v for k, v in doc.items() if k not in _CAMPOS_VOLATEIS}
+
+
+def planejar(db: Path, modo: str, incluir_encerrados: bool) -> tuple[list[NumeroProcesso], dict]:
+    """Decide quais processos consultar, a partir de uma cópia do banco do artifact
+    (pastas geradas pelo ArtifactData com out_dir: acompanhamento/lista.json,
+    solicitacoes/*.json e processos/*.json)."""
+    from .util import extrair_numeros
+
+    existentes = {p.stem: d for p in (db / "processos").glob("*.json") if (d := _ler_json(p))}
+    solicit = {p.stem: d for p in (db / "solicitacoes").glob("*.json") if (d := _ler_json(p))}
+    numeros: dict[str, NumeroProcesso] = {}
+    for d in solicit.values():
+        for n in extrair_numeros(str(d.get("numero", ""))):
+            numeros[n.chave] = n
+    pulados = 0
+    if modo == "agendado":
+        lista = _ler_json(db / "acompanhamento" / "lista.json") or {}
+        for txt in lista.get("numeros", []):
+            for n in extrair_numeros(str(txt)):
+                doc = existentes.get(n.chave)
+                status = str((doc or {}).get("status", "")).upper()
+                if doc and not incluir_encerrados and any(s in status for s in _ENCERRADO) and n.chave not in solicit:
+                    pulados += 1
+                    continue
+                numeros.setdefault(n.chave, n)
+    return list(numeros.values()), {"existentes": existentes, "solicitacoes": solicit, "pulados_encerrados": pulados}
+
+
+def rotina(db: Path, modo: str, incluir_encerrados: bool, cliente: SipacClient, saida: Path) -> dict:
+    """Consulta o SIPAC e separa em saida/alterados apenas os documentos que mudaram,
+    para a gravação no artifact ser pequena. Gera saida/plano.json com o que gravar."""
+    numeros, ctx = planejar(db, modo, incluir_encerrados)
+    st = sincronizar(numeros, cliente, saida)
+    (saida / "alterados").mkdir(parents=True, exist_ok=True)
+    for velho in (saida / "alterados").glob("*.json"):
+        velho.unlink()
+    alterados, novos = [], []
+    falhou = {f["numero"] for f in st["falhas"]}
+    for arq in sorted((saida / "processos").glob("*.json")):
+        doc = json.loads(arq.read_text(encoding="utf-8"))
+        antigo = ctx["existentes"].get(arq.stem)
+        if antigo is None or _essencial(antigo) != _essencial(doc):
+            (saida / "alterados" / arq.name).write_text(arq.read_text(encoding="utf-8"), encoding="utf-8")
+            (novos if antigo is None else alterados).append(arq.stem)
+    resolvidas = [c for c, d in ctx["solicitacoes"].items() if str(d.get("numero", "")) not in falhou
+                  and (saida / "processos" / f"{c}.json").exists()]
+    st.update({"modo": modo, "verificados": st["atualizados"], "alterados": len(alterados), "novos": len(novos),
+               "pulados_encerrados": ctx["pulados_encerrados"]})
+    (saida / "status.json").write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
+    plano = {"gravar_novos": novos, "gravar_alterados": alterados, "apagar_solicitacoes": resolvidas,
+             "status": str(saida / "status.json")}
+    (saida / "plano.json").write_text(json.dumps(plano, ensure_ascii=False, indent=1), encoding="utf-8")
+    return plano

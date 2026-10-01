@@ -54,7 +54,13 @@ def test_classificacao_setores(cfg):
     # Unidades de outros órgãos com nome parecido não podem ser confundidas
     assert cfg.setor_de("SOF - COORDENAÇÃO DE ORÇAMENTO E FINANÇAS (11.00.46.38.01)") is None
     # Qualquer unidade abaixo de 11.01.07 é PROPLAN, mesmo sem regra específica
-    assert cfg.setor_de("PROPLAN - DIVISÃO NOVA (11.01.07.09)") == "PROPLAN"
+    assert cfg.setor_de("PROPLAN - DIVISÃO NOVA (11.00.61.09)") == "PROPLAN"
+    # Códigos reais (relatórios SIPAC de 01/10/2026)
+    assert cfg.setor_de("PRÓ-REITORIA DE PLANEJAMENTO (PROPLAN) (11.00.61)") == "PROPLAN"
+    assert cfg.setor_de("PROPLAN - COORDENAÇÃO DE INFORMAÇÃO (11.00.61.01)") == "CODEINFO"
+    assert cfg.setor_de("PROPLAN - SECRETARIA EXECUTIVA (11.00.61.02)") == "SECRETARIA"
+    assert cfg.setor_de("PROPLAN - COORDENAÇÃO DE PLANEJAMENTO (11.01.07.05)") == "CODEPLAN"
+    assert cfg.setor_de("PROPLAN - COORDENAÇÃO DE CONVÊNIOS (11.01.07.06)") == "CODECON"
 
 
 def test_analise_processo_em_andamento(cfg):
@@ -156,3 +162,37 @@ def test_duracao_legivel():
     assert duracao(0.01) == "14 min"
     assert duracao(154.4) == "154 dias 9h"
     assert duracao(2) == "2 dias"
+
+
+def test_rotina_grava_so_o_que_mudou(tmp_path):
+    import json
+
+    from sipac_proplan.sincronizar import processo_para_doc, rotina
+
+    db = tmp_path / "db"
+    (db / "processos").mkdir(parents=True)
+    (db / "acompanhamento").mkdir()
+    (db / "solicitacoes").mkdir()
+    proc = _ler("processo_em_andamento.html")
+    antigo = processo_para_doc(proc)
+    antigo["atualizado_em"] = "2026-09-01T00:00:00Z"
+    (db / "processos" / f"{antigo['chave']}.json").write_text(json.dumps(antigo), encoding="utf-8")
+    arquivado = processo_para_doc(_ler("processo_arquivado.html"))
+    (db / "processos" / f"{arquivado['chave']}.json").write_text(json.dumps(arquivado), encoding="utf-8")
+    (db / "acompanhamento" / "lista.json").write_text(json.dumps(
+        {"numeros": ["23074.012345/2026-56", "23074.000777/2026-10"]}), encoding="utf-8")
+    (db / "solicitacoes" / "23074000123202611.json").write_text(
+        json.dumps({"numero": "23074.000123/2026-11"}), encoding="utf-8")
+
+    class Falso:
+        def buscar(self, num):
+            nome = {"012345": "processo_em_andamento.html", "000123": "processo_em_andamento.html"}[num.numero]
+            html = (FIX / nome).read_text(encoding="utf-8")
+            return html.replace("23074.012345/2026-56", str(num))
+
+    plano = rotina(db, "agendado", False, Falso(), tmp_path / "sync")
+    assert plano["gravar_alterados"] == []            # nada mudou no processo já existente
+    assert plano["gravar_novos"] == ["23074000123202611"]
+    assert plano["apagar_solicitacoes"] == ["23074000123202611"]
+    st = json.loads((tmp_path / "sync" / "status.json").read_text(encoding="utf-8"))
+    assert st["pulados_encerrados"] == 1              # arquivado não é consultado fora das 07h

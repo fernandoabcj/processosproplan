@@ -1,5 +1,5 @@
 {
-  "_comentario": "Regras para reconhecer as unidades da PROPLAN nas movimentações do SIPAC. A ordem importa: a primeira regra que casar define o setor (a PROPLAN genérica fica por último). 'codigos' aceita o código SIPAC da unidade (ex.: 11.01.07.04) ou um prefixo terminado em '.*' (ex.: 11.01.07.* = qualquer unidade abaixo da PROPLAN). 'padroes' são expressões regulares aplicadas ao nome da unidade em MAIÚSCULAS e sem acentos. No SIPAC/UFPB as unidades da PROPLAN aparecem como 'PROPLAN - NOME (11.01.07.xx)'; não use padrões genéricos como 'COORDENACAO DE ORCAMENTO', que também casam com 'SOF - COORDENACAO DE ORCAMENTO E FINANCAS'.",
+  "_comentario": "Regras para reconhecer as unidades da PROPLAN nas movimentações do SIPAC. A ordem importa: a primeira regra que casar define o setor (a PROPLAN genérica fica por último). 'codigos' aceita o código SIPAC da unidade (ex.: 11.01.07.04) ou um prefixo terminado em '.*' (ex.: 11.00.61.* = qualquer unidade abaixo do Gabinete da PROPLAN). 'padroes' são expressões regulares aplicadas ao nome da unidade em MAIÚSCULAS e sem acentos. No SIPAC/UFPB as unidades da PROPLAN aparecem como 'PROPLAN - NOME (11.01.07.xx)'; não use padrões genéricos como 'COORDENACAO DE ORCAMENTO', que também casam com 'SOF - COORDENACAO DE ORCAMENTO E FINANCAS'.",
   "setores": [
     {
       "sigla": "CODEOR",
@@ -14,8 +14,10 @@
     },
     {
       "sigla": "CODEINFO",
-      "nome": "Coordenação de Informações",
-      "codigos": [],
+      "nome": "Coordenação de Informação",
+      "codigos": [
+        "11.00.61.01"
+      ],
       "padroes": [
         "^PROPLAN\\b.*COORDENACAO DE INFORMAC",
         "\\bCODEINFO\\b"
@@ -24,7 +26,9 @@
     {
       "sigla": "CODECON",
       "nome": "Coordenação de Convênios",
-      "codigos": [],
+      "codigos": [
+        "11.01.07.06"
+      ],
       "padroes": [
         "^PROPLAN\\b.*COORDENACAO DE CONVENIOS",
         "\\bCODECON\\b"
@@ -33,7 +37,9 @@
     {
       "sigla": "CODEPLAN",
       "nome": "Coordenação de Planejamento",
-      "codigos": [],
+      "codigos": [
+        "11.01.07.05"
+      ],
       "padroes": [
         "^PROPLAN\\b.*COORDENACAO DE PLANEJAMENTO",
         "\\bCODEPLAN\\b"
@@ -41,8 +47,10 @@
     },
     {
       "sigla": "SECRETARIA",
-      "nome": "Secretaria da PROPLAN",
-      "codigos": [],
+      "nome": "Secretaria Executiva",
+      "codigos": [
+        "11.00.61.02"
+      ],
       "padroes": [
         "^PROPLAN\\b.*SECRETARIA",
         "SECRETARIA.*(PROPLAN|PRO-REITORIA DE PLANEJAMENTO)"
@@ -52,7 +60,8 @@
       "sigla": "PROPLAN",
       "nome": "PROPLAN (Gabinete)",
       "codigos": [
-        "11.01.07.*"
+        "11.00.61",
+        "11.00.61.*"
       ],
       "padroes": [
         "^PROPLAN\\b",

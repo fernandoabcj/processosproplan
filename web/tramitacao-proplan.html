@@ -187,11 +187,11 @@ function diasUteis(a, b, extras){
 const CFG_PADRAO = {
   setores: [
     {sigla:"CODEOR", nome:"Coordenação de Orçamento", codigos:["11.01.07.04"], padroes:["^PROPLAN\\b.*COORDENACAO DE ORCAMENTO","\\bCODEOR\\b"]},
-    {sigla:"CODEINFO", nome:"Coordenação de Informações", codigos:[], padroes:["^PROPLAN\\b.*COORDENACAO DE INFORMAC","\\bCODEINFO\\b"]},
-    {sigla:"CODECON", nome:"Coordenação de Convênios", codigos:[], padroes:["^PROPLAN\\b.*COORDENACAO DE CONVENIOS","\\bCODECON\\b"]},
-    {sigla:"CODEPLAN", nome:"Coordenação de Planejamento", codigos:[], padroes:["^PROPLAN\\b.*COORDENACAO DE PLANEJAMENTO","\\bCODEPLAN\\b"]},
-    {sigla:"SECRETARIA", nome:"Secretaria da PROPLAN", codigos:[], padroes:["^PROPLAN\\b.*SECRETARIA","SECRETARIA.*(PROPLAN|PRO-REITORIA DE PLANEJAMENTO)"]},
-    {sigla:"PROPLAN", nome:"PROPLAN (Gabinete)", codigos:["11.01.07.*"], padroes:["^PROPLAN\\b","PRO-REITORIA DE PLANEJAMENTO"]},
+    {sigla:"CODEINFO", nome:"Coordenação de Informação", codigos:["11.00.61.01"], padroes:["^PROPLAN\\b.*COORDENACAO DE INFORMAC","\\bCODEINFO\\b"]},
+    {sigla:"CODECON", nome:"Coordenação de Convênios", codigos:["11.01.07.06"], padroes:["^PROPLAN\\b.*COORDENACAO DE CONVENIOS","\\bCODECON\\b"]},
+    {sigla:"CODEPLAN", nome:"Coordenação de Planejamento", codigos:["11.01.07.05"], padroes:["^PROPLAN\\b.*COORDENACAO DE PLANEJAMENTO","\\bCODEPLAN\\b"]},
+    {sigla:"SECRETARIA", nome:"Secretaria Executiva", codigos:["11.00.61.02"], padroes:["^PROPLAN\\b.*SECRETARIA","SECRETARIA.*(PROPLAN|PRO-REITORIA DE PLANEJAMENTO)"]},
+    {sigla:"PROPLAN", nome:"PROPLAN (Gabinete)", codigos:["11.00.61","11.00.61.*"], padroes:["^PROPLAN\\b","PRO-REITORIA DE PLANEJAMENTO"]},
   ],
   limite_parado: 15, limite_receb: 3, limite_passagens: 3, feriados_extras: [],
 };
@@ -369,21 +369,21 @@ const EXEMPLOS = (() => {
   return [
     {numero:"23074.900001/2026-01", chave:"23074900001202601", assunto:"ORÇAMENTO: DESCENTRALIZAÇÃO DE CRÉDITO (TED)", status:"ATIVO",
      autuacao:d(29), origem:"CENTRO DE CIENCIAS EXATAS E DA NATUREZA (11.00.48)", interessados:[], movs:[
-      {envio:d(26,14), origem:"CENTRO DE CIENCIAS EXATAS E DA NATUREZA (11.00.48)", destino:"PROPLAN - SECRETARIA (11.01.07.01)", receb:d(23,10)},
-      {envio:d(16), origem:"PROPLAN - SECRETARIA (11.01.07.01)", destino:"PRÓ-REITORIA DE PLANEJAMENTO E DESENVOLVIMENTO (11.01.07)", receb:d(15,8)},
-      {envio:d(6,10), origem:"PRÓ-REITORIA DE PLANEJAMENTO E DESENVOLVIMENTO (11.01.07)", destino:"PROPLAN - COORDENAÇÃO DE ORÇAMENTO (11.01.07.04)", receb:null}]},
+      {envio:d(26,14), origem:"CENTRO DE CIENCIAS EXATAS E DA NATUREZA (11.00.48)", destino:"PROPLAN - SECRETARIA EXECUTIVA (11.00.61.02)", receb:d(23,10)},
+      {envio:d(16), origem:"PROPLAN - SECRETARIA EXECUTIVA (11.00.61.02)", destino:"PRÓ-REITORIA DE PLANEJAMENTO (PROPLAN) (11.00.61)", receb:d(15,8)},
+      {envio:d(6,10), origem:"PRÓ-REITORIA DE PLANEJAMENTO (PROPLAN) (11.00.61)", destino:"PROPLAN - COORDENAÇÃO DE ORÇAMENTO (11.01.07.04)", receb:null}]},
     {numero:"23074.900002/2026-02", chave:"23074900002202602", assunto:"CONVÊNIO COM PREFEITURA MUNICIPAL", status:"ARQUIVADO",
      autuacao:d(205), origem:"GABINETE DA REITORIA (11.00.01)", interessados:[], movs:[
-      {envio:d(203), origem:"GABINETE DA REITORIA (11.00.01)", destino:"PROPLAN - SECRETARIA (11.01.07.01)", receb:d(203,11)},
-      {envio:d(202), origem:"PROPLAN - SECRETARIA (11.01.07.01)", destino:"PROPLAN - COORDENAÇÃO DE CONVÊNIOS (11.01.07.05)", receb:d(199)},
-      {envio:d(178), origem:"PROPLAN - COORDENAÇÃO DE CONVÊNIOS (11.01.07.05)", destino:"PROCURADORIA FEDERAL (11.00.05)", receb:d(177)},
-      {envio:d(164), origem:"PROCURADORIA FEDERAL (11.00.05)", destino:"PROPLAN - COORDENAÇÃO DE CONVÊNIOS (11.01.07.05)", receb:d(162)},
-      {envio:d(154), origem:"PROPLAN - COORDENAÇÃO DE CONVÊNIOS (11.01.07.05)", destino:"ARQUIVO CENTRAL (11.00.09)", receb:d(150)}]},
+      {envio:d(203), origem:"GABINETE DA REITORIA (11.00.01)", destino:"PROPLAN - SECRETARIA EXECUTIVA (11.00.61.02)", receb:d(203,11)},
+      {envio:d(202), origem:"PROPLAN - SECRETARIA EXECUTIVA (11.00.61.02)", destino:"PROPLAN - COORDENAÇÃO DE CONVÊNIOS (11.01.07.06)", receb:d(199)},
+      {envio:d(178), origem:"PROPLAN - COORDENAÇÃO DE CONVÊNIOS (11.01.07.06)", destino:"PROCURADORIA FEDERAL (11.00.05)", receb:d(177)},
+      {envio:d(164), origem:"PROCURADORIA FEDERAL (11.00.05)", destino:"PROPLAN - COORDENAÇÃO DE CONVÊNIOS (11.01.07.06)", receb:d(162)},
+      {envio:d(154), origem:"PROPLAN - COORDENAÇÃO DE CONVÊNIOS (11.01.07.06)", destino:"ARQUIVO CENTRAL (11.00.09)", receb:d(150)}]},
     {numero:"23074.900003/2026-03", chave:"23074900003202603", assunto:"PLANEJAMENTO: PDI – INDICADORES 2026", status:"ATIVO",
      autuacao:d(48), origem:"PRÓ-REITORIA DE GRADUAÇÃO (11.00.10)", interessados:[], movs:[
-      {envio:d(46), origem:"PRÓ-REITORIA DE GRADUAÇÃO (11.00.10)", destino:"PROPLAN - SECRETARIA (11.01.07.01)", receb:d(45)},
-      {envio:d(44), origem:"PROPLAN - SECRETARIA (11.01.07.01)", destino:"PROPLAN - COORDENAÇÃO DE INFORMAÇÕES (11.01.07.03)", receb:d(41)},
-      {envio:d(30), origem:"PROPLAN - COORDENAÇÃO DE INFORMAÇÕES (11.01.07.03)", destino:"PROPLAN - COORDENAÇÃO DE PLANEJAMENTO (11.01.07.06)", receb:d(29)}]},
+      {envio:d(46), origem:"PRÓ-REITORIA DE GRADUAÇÃO (11.00.10)", destino:"PROPLAN - SECRETARIA EXECUTIVA (11.00.61.02)", receb:d(45)},
+      {envio:d(44), origem:"PROPLAN - SECRETARIA EXECUTIVA (11.00.61.02)", destino:"PROPLAN - COORDENAÇÃO DE INFORMAÇÃO (11.00.61.01)", receb:d(41)},
+      {envio:d(30), origem:"PROPLAN - COORDENAÇÃO DE INFORMAÇÃO (11.00.61.01)", destino:"PROPLAN - COORDENAÇÃO DE PLANEJAMENTO (11.01.07.05)", receb:d(29)}]},
   ];
 })();
 
@@ -395,6 +395,18 @@ const S = { view:"painel", reais:new Map(), carregou:false, db:null, user:null, 
 const V = () => S.visao;
 const nomeVisao = () => V() ? `${V()} – ${S.cfg.nome(V())}` : "Toda a PROPLAN";
 const rotuloAlvo = () => V() || "PROPLAN";
+/* Última vez que o processo foi conferido no SIPAC: a rotina só regrava o que mudou,
+   então vale a última execução sem falha para ele, ou a última mudança registrada. */
+function conferidoEm(p){
+  const st = S.status, mud = p?.atualizado_em ? new Date(p.atualizado_em) : null;
+  if (!p) return null;
+  if (st?.ultima_execucao && !st.erro_geral && !(st.falhas||[]).some(f => f.numero === p.numero)) {
+    const ex = new Date(st.ultima_execucao);
+    const encerrado = ENCERRADO.some(x => norm(p.status).includes(x));
+    if (!encerrado || st.modo !== "agendado" || !st.pulados_encerrados) return mud && mud > ex ? mud : ex;
+  }
+  return mud;
+}
 function cadastradoNo(sig, chave){ return !!S.chavesPor[sig]?.has(chave); }
 function enriquecer(a){
   const v = V();
@@ -601,7 +613,8 @@ function telaDetalhe(){
       <div><dt>Tramitação total</dt><dd>${dur(a.tramitacao)} desde ${fd(a.perms[0]?.inicio)}</dd></div>
       <div><dt>Total na PROPLAN</dt><dd>${dur(a.totalProplan)}</dd></div>
       <div><dt>Status · Origem</dt><dd>${esc(p.status||"—")} · ${esc(p.origem||"—")}</dd></div>
-      <div><dt>Dados atualizados em</dt><dd>${p.atualizado_em ? fd(new Date(p.atualizado_em),true) : "exemplo"} ${quem}</dd></div>
+      <div><dt>Conferido no SIPAC em</dt><dd>${p.atualizado_em ? fd(conferidoEm(p),true) : "exemplo"} ${quem}</dd></div>
+      <div><dt>Última mudança registrada</dt><dd>${p.atualizado_em ? fd(new Date(p.atualizado_em),true) : "—"}</dd></div>
     </dl>
     ${setoresPassou.length ? `<div class="legend">${setoresPassou.map(s=>`<span class="chip" style="--c:${S.cfg.cor(s)}"><i></i>${esc(s)}: ${dur(a.porSetor[s])} · ${uteisTxt(a.uteisSetor[s])}${a.passagens[s]>1?` · ${a.passagens[s]}×`:""}</span>`).join("")}</div>` : ""}
     ${strip(a)}
@@ -616,9 +629,9 @@ function telaAdicionar(){
   const listaVis = V() ? (S.listaPor[V()] || []) : S.lista;
   const setoresDe = n => Object.entries(S.listaPor).filter(([k,v]) => k !== "_geral" && v.includes(n)).map(([k]) => k);
   const pend = listaVis.map(n => { const k = numProc(n)?.chave; const p = k && reais.get(k);
-    const idade = p?.atualizado_em ? (Date.now()-new Date(p.atualizado_em))/DIA : null;
-    return `<tr${p?` class="click" data-p="${k}"`:""}><td class="mono">${esc(n)}</td><td>${p ? (idade > 7 ? `<span class="pill warn">atualizado há ${Math.floor(idade)} dias</span>` : `<span class="pill ok">atualizado</span>`) : (S.fila.has(k) ? `<span class="pill warn">na fila de busca</span>` : `<span class="pill neu">aguardando busca</span>`)}</td>
-    <td>${p ? fd(new Date(p.atualizado_em),true) : ""}</td>${V() ? "" : `<td>${setoresDe(n).map(chip).join(" ")}</td>`}</tr>`; });
+    const conf = conferidoEm(p), idade = conf ? (Date.now()-conf)/DIA : null;
+    return `<tr${p?` class="click" data-p="${k}"`:""}><td class="mono">${esc(n)}</td><td>${p ? (idade > 7 ? `<span class="pill warn">atualizado há ${Math.floor(idade)} dias</span>` : `<span class="pill ok">em dia</span>`) : (S.fila.has(k) ? `<span class="pill warn">na fila de busca</span>` : `<span class="pill neu">aguardando busca</span>`)}</td>
+    <td>${conf ? fd(conf,true) : ""}</td>${V() ? "" : `<td>${setoresDe(n).map(chip).join(" ")}</td>`}</tr>`; });
   const so = S.podeEscrever === false;
   const fila = [...S.fila.values()].sort((a,b)=> (a.solicitado_em||"") < (b.solicitado_em||"") ? 1 : -1);
   return `<section class="sec">
@@ -655,7 +668,7 @@ function telaAdicionar(){
     <div class="sec-head"><h2>Lista de acompanhamento ${V() ? "da " + esc(V()) : "geral"}</h2><span class="note">${V() ? `Processos que a ${esc(V())} acompanha. Cada setor tem a sua lista.` : "Processos sem setor definido. As listas de cada setor ficam na visão do setor (seletor no topo)."}</span></div>
     <textarea id="lista" rows="4" placeholder="Cole aqui números de processo, um por linha ou misturados com texto (ex.: a relação de processos da unidade no SIPAC)">${esc((S.listaPor[chaveLista]||[]).join("\n"))}</textarea>
     <div class="row"><button class="btn pri" id="salvar-lista" ${so?"disabled":""}>Salvar lista</button><span class="note">${(S.listaPor[chaveLista]||[]).length} processo(s) nesta lista${V() ? "" : ` · ${S.lista.length} no total, somando todos os setores`}</span></div>
-    ${tabela("t-lista",[{t:"Processo"},{t:"Situação na ferramenta"},{t:"Última atualização"}, ...(V() ? [] : [{t:"Setores"}])], pend, "A lista está vazia.")}
+    ${tabela("t-lista",[{t:"Processo"},{t:"Situação na ferramenta"},{t:"Conferido no SIPAC em"}, ...(V() ? [] : [{t:"Setores"}])], pend, "A lista está vazia.")}
   </section>`;
 }
 
@@ -676,7 +689,7 @@ function telaSetores(){
   </section>
   <section class="sec">
     <div class="sec-head"><h2>Setores da PROPLAN</h2><span class="note">${pode ? "A primeira regra que casar define o setor. Deixe a PROPLAN (Gabinete) por último." : "Somente editores podem alterar estas regras."}</span></div>
-    <p class="note">O critério mais seguro é o <b>código SIPAC</b> da unidade, que aparece entre parênteses no nome, como em “PROPLAN - COORDENAÇÃO DE ORÇAMENTO (11.01.07.04)”. Um código terminado em <span class="mono">.*</span> vale para todas as unidades abaixo dele (<span class="mono">11.01.07.*</span> = toda a PROPLAN). Os padrões do nome são comparados em maiúsculas e sem acentos. Evite padrões genéricos: “COORDENACAO DE ORCAMENTO” sozinho também pega a “SOF - COORDENAÇÃO DE ORÇAMENTO E FINANÇAS”.</p>
+    <p class="note">O critério mais seguro é o <b>código SIPAC</b> da unidade, que aparece entre parênteses no nome, como em “PROPLAN - COORDENAÇÃO DE ORÇAMENTO (11.01.07.04)”. Um código terminado em <span class="mono">.*</span> vale para todas as unidades abaixo dele (<span class="mono">11.00.61.*</span> = tudo abaixo do Gabinete da PROPLAN). Os padrões do nome são comparados em maiúsculas e sem acentos. Evite padrões genéricos: “COORDENACAO DE ORCAMENTO” sozinho também pega a “SOF - COORDENAÇÃO DE ORÇAMENTO E FINANÇAS”.</p>
     <div class="cfg-grid">${itens}</div>
     <h3>Alertas e prazos</h3>
     <div class="row">
@@ -820,7 +833,7 @@ function statusColetor(){
   const erroGeral = st.erro_geral ? `<div><span class="pill crit">falha</span> ${esc(st.erro_geral)}</div>` : "";
   return `<section class="sec"><div class="sec-head"><h2>Atualização automática</h2>
     <span class="note">Última: ${quando} · próxima por volta de ${prox}</span></div>
-    <div class="row"><span class="pill ${st.erro_geral ? "crit" : falhas.length ? "warn" : "ok"}">${st.erro_geral ? "SIPAC inacessível" : `${st.atualizados||0} de ${st.total||0} atualizados`}</span>
+    <div class="row"><span class="pill ${st.erro_geral ? "crit" : falhas.length ? "warn" : "ok"}">${st.erro_geral ? "SIPAC inacessível" : `${st.verificados ?? st.atualizados ?? 0} de ${st.total||0} conferidos${st.alterados != null ? ` · ${st.alterados + (st.novos||0)} com mudança` : ""}${st.pulados_encerrados ? ` · ${st.pulados_encerrados} encerrados (conferidos às 07h)` : ""}`}</span>
     ${S.fila.size ? `<span class="pill neu">${S.fila.size} na fila</span>` : ""}</div>
     ${erroGeral}${falhas.slice(0,8).map(f=>`<div class="note"><span class="mono">${esc(f.numero)}</span>: ${esc(f.erro)}</div>`).join("")}</section>`;
 }
