@@ -134,3 +134,11 @@ def duracao(dias: float | None) -> str:
     if not d:
         return f"{h}h {m}min" if m else f"{h}h"
     return f"{d} {'dia' if d == 1 else 'dias'}" + (f" {h}h" if h else "")
+
+
+def agora_local() -> datetime:
+    """Hora atual em João Pessoa (sem fuso), comparável às datas do SIPAC.
+    Necessário porque a rotina na nuvem roda em UTC."""
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(ZoneInfo("America/Fortaleza")).replace(tzinfo=None)

@@ -398,14 +398,16 @@ const rotuloAlvo = () => V() || "PROPLAN";
 /* Última vez que o processo foi conferido no SIPAC: a rotina só regrava o que mudou,
    então vale a última execução sem falha para ele, ou a última mudança registrada. */
 function conferidoEm(p){
-  const st = S.status, mud = p?.atualizado_em ? new Date(p.atualizado_em) : null;
   if (!p) return null;
-  if (st?.ultima_execucao && !st.erro_geral && !(st.falhas||[]).some(f => f.numero === p.numero)) {
-    const ex = new Date(st.ultima_execucao);
-    const encerrado = ENCERRADO.some(x => norm(p.status).includes(x));
-    if (!encerrado || st.modo !== "agendado" || !st.pulados_encerrados) return mud && mud > ex ? mud : ex;
-  }
-  return mud;
+  const st = S.status, mud = p.atualizado_em ? new Date(p.atualizado_em) : null;
+  const max = (...ds) => ds.filter(Boolean).reduce((a,b) => b > a ? b : a, null);
+  if (!st || st.erro_geral) return mud;
+  if ((st.falhas||[]).some(f => f.numero === p.numero)) return mud;
+  const encerrado = ENCERRADO.some(x => norm(p.status).includes(x));
+  const ult = (p.movs||[]).at(-1), envio = ult ? new Date(ult.envio) : null;
+  const foco = !encerrado && (!ult || S.cfg.setorDe(ult.destino) || (envio && Date.now() - envio < 3*DIA));
+  const base = encerrado ? st.ultima_encerrados : (foco || st.completo !== false ? st.ultima_execucao : st.ultima_completa);
+  return max(mud, base ? new Date(base) : null);
 }
 function cadastradoNo(sig, chave){ return !!S.chavesPor[sig]?.has(chave); }
 function enriquecer(a){
@@ -646,7 +648,7 @@ function telaAdicionar(){
   const so = S.podeEscrever === false;
   const fila = [...S.fila.values()].sort((a,b)=> (a.solicitado_em||"") < (b.solicitado_em||"") ? 1 : -1);
   return `<section class="sec">
-    <div class="sec-head"><h2>Adicionar processo pelo número${V() ? " – " + esc(V()) : ""}</h2><span class="note">A busca no SIPAC começa na hora. Depois, todos os processos são atualizados de hora em hora, das 07h às 18h.</span></div>
+    <div class="sec-head"><h2>Adicionar processo pelo número${V() ? " – " + esc(V()) : ""}</h2><span class="note">A busca no SIPAC começa na hora. Depois: de hora em hora (08h–18h) os processos que estão na PROPLAN ou se movimentaram nos últimos 3 dias; às 07h todos os ativos; às segundas, também os arquivados.</span></div>
     <form class="row" id="form-num">
       <input type="text" id="novo-num" placeholder="23074.012345/2026-56" aria-label="Número do processo" style="flex:1 1 260px;max-width:420px" ${so||!S.db?"disabled":""}>
       <button class="btn pri" type="submit" ${so||!S.db?"disabled":""}>Adicionar</button>
@@ -844,7 +846,7 @@ function statusColetor(){
   const erroGeral = st.erro_geral ? `<div><span class="pill crit">falha</span> ${esc(st.erro_geral)}</div>` : "";
   return `<section class="sec"><div class="sec-head"><h2>Atualização automática</h2>
     <span class="note">Última: ${quando} · próxima por volta de ${prox}</span></div>
-    <div class="row"><span class="pill ${st.erro_geral ? "crit" : falhas.length ? "warn" : "ok"}">${st.erro_geral ? "SIPAC inacessível" : `${st.verificados ?? st.atualizados ?? 0} de ${st.total||0} conferidos${st.alterados != null ? ` · ${st.alterados + (st.novos||0)} com mudança` : ""}${st.pulados_encerrados ? ` · ${st.pulados_encerrados} encerrados (conferidos às 07h)` : ""}`}</span>
+    <div class="row"><span class="pill ${st.erro_geral ? "crit" : falhas.length ? "warn" : "ok"}">${st.erro_geral ? "SIPAC inacessível" : `${st.verificados ?? st.atualizados ?? 0} de ${st.total||0} conferidos${st.alterados != null ? ` · ${st.alterados + (st.novos||0)} com mudança` : ""}${st.pulados_fora_do_foco ? ` · ${st.pulados_fora_do_foco} fora da PROPLAN (conferidos às 07h)` : ""}${st.pulados_encerrados ? ` · ${st.pulados_encerrados} encerrados (conferidos às segundas, 07h)` : ""}`}</span>
     ${S.fila.size ? `<span class="pill neu">${S.fila.size} na fila</span>` : ""}</div>
     ${erroGeral}${falhas.slice(0,8).map(f=>`<div class="note"><span class="mono">${esc(f.numero)}</span>: ${esc(f.erro)}</div>`).join("")}</section>`;
 }

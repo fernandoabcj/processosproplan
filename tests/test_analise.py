@@ -196,3 +196,28 @@ def test_rotina_grava_so_o_que_mudou(tmp_path):
     assert plano["apagar_solicitacoes"] == ["23074000123202611"]
     st = json.loads((tmp_path / "sync" / "status.json").read_text(encoding="utf-8"))
     assert st["pulados_encerrados"] == 1              # arquivado não é consultado fora das 07h
+
+
+def test_rotina_de_hora_em_hora_so_confere_o_foco(tmp_path):
+    import json
+    from datetime import datetime
+
+    from sipac_proplan.sincronizar import planejar, processo_para_doc
+
+    db = tmp_path / "db"
+    (db / "processos").mkdir(parents=True)
+    (db / "acompanhamento").mkdir()
+    na_proplan = processo_para_doc(_ler("processo_em_andamento.html"))   # hoje na CODEOR
+    fora = dict(na_proplan, numero="23074.000555/2026-11", chave="23074000555202611",
+                movs=na_proplan["movs"][:1])                             # último destino: Secretaria? não
+    fora["movs"] = [dict(fora["movs"][0], destino="PROCURADORIA FEDERAL (11.00.05)", envio="2026-09-01T10:00")]
+    for d in (na_proplan, fora):
+        (db / "processos" / f"{d['chave']}.json").write_text(json.dumps(d), encoding="utf-8")
+    (db / "acompanhamento" / "lista.json").write_text(json.dumps({"numeros": [
+        na_proplan["numero"], fora["numero"], "23074.000999/2026-99"]}), encoding="utf-8")
+    agora = datetime(2026, 10, 1, 10, 0)
+    nums, ctx = planejar(db, "agendado", False, completo=False, agora=agora)
+    assert sorted(str(n) for n in nums) == ["23074.000999/2026-99", "23074.012345/2026-56"]
+    assert ctx["pulados_fora_do_foco"] == 1
+    nums, _ = planejar(db, "agendado", False, completo=True, agora=agora)
+    assert len(nums) == 3

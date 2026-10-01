@@ -98,36 +98,74 @@ def _essencial(doc: dict) -> dict:
     return {k: v for k, v in doc.items() if k not in _CAMPOS_VOLATEIS}
 
 
-def planejar(db: Path, modo: str, incluir_encerrados: bool) -> tuple[list[NumeroProcesso], dict]:
+def _em_foco(doc: dict, cfg, agora: datetime, dias_recentes: float = 3.0) -> bool:
+    """Processo ativo que está hoje numa unidade da PROPLAN ou se movimentou há pouco."""
+    status = str(doc.get("status", "")).upper()
+    if any(s in status for s in _ENCERRADO):
+        return False
+    movs = doc.get("movs") or []
+    if not movs:
+        return True
+    ultimo = movs[-1]
+    if cfg.setor_de(ultimo.get("destino")):
+        return True
+    try:
+        envio = datetime.fromisoformat(str(ultimo.get("envio")))
+    except ValueError:
+        return True
+    return (agora - envio).total_seconds() < dias_recentes * 86400
+
+
+def planejar(db: Path, modo: str, incluir_encerrados: bool, completo: bool = True,
+             cfg=None, agora: datetime | None = None) -> tuple[list[NumeroProcesso], dict]:
     """Decide quais processos consultar, a partir de uma cópia do banco do artifact
     (pastas geradas pelo ArtifactData com out_dir: acompanhamento/lista.json,
-    solicitacoes/*.json e processos/*.json)."""
+    solicitacoes/*.json e processos/*.json).
+
+    - imediato: só as solicitações pendentes;
+    - agendado completo (07h): todos os ativos; encerrados só se incluir_encerrados;
+    - agendado de foco (demais horas): processos hoje na PROPLAN, movimentados nos
+      últimos 3 dias ou ainda não baixados.
+    """
+    from .config import carregar_config
     from .util import extrair_numeros
 
+    cfg = cfg or carregar_config()
+    if agora is None:
+        from .util import agora_local
+        agora = agora_local()
     existentes = {p.stem: d for p in (db / "processos").glob("*.json") if (d := _ler_json(p))}
     solicit = {p.stem: d for p in (db / "solicitacoes").glob("*.json") if (d := _ler_json(p))}
     numeros: dict[str, NumeroProcesso] = {}
     for d in solicit.values():
         for n in extrair_numeros(str(d.get("numero", ""))):
             numeros[n.chave] = n
-    pulados = 0
+    pulados_enc = pulados_foco = 0
     if modo == "agendado":
         lista = _ler_json(db / "acompanhamento" / "lista.json") or {}
         for txt in lista.get("numeros", []):
             for n in extrair_numeros(str(txt)):
                 doc = existentes.get(n.chave)
-                status = str((doc or {}).get("status", "")).upper()
-                if doc and not incluir_encerrados and any(s in status for s in _ENCERRADO) and n.chave not in solicit:
-                    pulados += 1
+                if doc is None or n.chave in solicit:
+                    numeros.setdefault(n.chave, n)
+                    continue
+                status = str(doc.get("status", "")).upper()
+                if any(s in status for s in _ENCERRADO) and not incluir_encerrados:
+                    pulados_enc += 1
+                    continue
+                if not completo and not _em_foco(doc, cfg, agora):
+                    pulados_foco += 1
                     continue
                 numeros.setdefault(n.chave, n)
-    return list(numeros.values()), {"existentes": existentes, "solicitacoes": solicit, "pulados_encerrados": pulados}
+    return list(numeros.values()), {"existentes": existentes, "solicitacoes": solicit,
+                                    "pulados_encerrados": pulados_enc, "pulados_fora_do_foco": pulados_foco}
 
 
-def rotina(db: Path, modo: str, incluir_encerrados: bool, cliente: SipacClient, saida: Path) -> dict:
+def rotina(db: Path, modo: str, incluir_encerrados: bool, cliente: SipacClient, saida: Path,
+           completo: bool = True, agora: datetime | None = None) -> dict:
     """Consulta o SIPAC e separa em saida/alterados apenas os documentos que mudaram,
     para a gravação no artifact ser pequena. Gera saida/plano.json com o que gravar."""
-    numeros, ctx = planejar(db, modo, incluir_encerrados)
+    numeros, ctx = planejar(db, modo, incluir_encerrados, completo, agora=agora)
     st = sincronizar(numeros, cliente, saida)
     (saida / "alterados").mkdir(parents=True, exist_ok=True)
     for velho in (saida / "alterados").glob("*.json"):
@@ -142,8 +180,13 @@ def rotina(db: Path, modo: str, incluir_encerrados: bool, cliente: SipacClient, 
             (novos if antigo is None else alterados).append(arq.stem)
     resolvidas = [c for c, d in ctx["solicitacoes"].items() if str(d.get("numero", "")) not in falhou
                   and (saida / "processos" / f"{c}.json").exists()]
+    anterior = _ler_json(db / "status" / "coletor.json") or {}
+    agora_iso = st["ultima_execucao"]
+    st["ultima_completa"] = agora_iso if (modo == "agendado" and completo) else anterior.get("ultima_completa")
+    st["ultima_encerrados"] = agora_iso if (modo == "agendado" and incluir_encerrados) else anterior.get("ultima_encerrados")
     st.update({"modo": modo, "verificados": st["atualizados"], "alterados": len(alterados), "novos": len(novos),
-               "pulados_encerrados": ctx["pulados_encerrados"]})
+               "pulados_encerrados": ctx["pulados_encerrados"], "pulados_fora_do_foco": ctx["pulados_fora_do_foco"],
+               "completo": completo})
     (saida / "status.json").write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
     plano = {"gravar_novos": novos, "gravar_alterados": alterados, "apagar_solicitacoes": resolvidas,
              "status": str(saida / "status.json")}

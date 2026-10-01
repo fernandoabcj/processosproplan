@@ -1,6 +1,6 @@
 {
   "_comentario": "Só preencha 'consulta' se a detecção automática do formulário falhar. Rode 'coletar --debug' e abra dados/debug/*_1_formulario.html para ver os nomes (atributo name) dos campos. Ex.: \"campo_numero\": \"formConsulta:numero\", \"botao\": \"formConsulta:btnConsultar=Consultar\", \"criterio_numero\": \"formConsulta:checkNumero=on\".",
   "base_url": "https://sipac.ufpb.br",
-  "atraso_entre_requisicoes": 1.0,
+  "atraso_entre_requisicoes": 0.5,
   "consulta": {}
 }

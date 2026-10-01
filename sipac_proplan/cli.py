@@ -20,7 +20,7 @@ from .cliente import ErroConsulta, SipacClient
 from .config import carregar_config
 from .parser import ErroParser, parse_processo
 from .relatorio import gerar_excel, gerar_html, resumo_texto
-from .util import extrair_numeros, ler_numeros_de_arquivos, parse_data, parse_numero
+from .util import agora_local, extrair_numeros, ler_numeros_de_arquivos, parse_data, parse_numero
 
 RAIZ = Path(__file__).resolve().parent.parent
 PASTA_HTML = Path("dados/html")
@@ -98,7 +98,7 @@ def _arquivos_html(caminhos: list[str]) -> list[Path]:
 
 def cmd_analisar(args) -> int:
     cfg = carregar_config(args.config)
-    ref = parse_data(args.referencia) if args.referencia else datetime.now()
+    ref = parse_data(args.referencia) if args.referencia else agora_local()
     arquivos = _arquivos_html(args.html or [str(PASTA_HTML)])
     if not arquivos:
         print("Nenhum HTML de processo encontrado. Rode 'coletar' primeiro.", file=sys.stderr)
@@ -155,7 +155,7 @@ def cmd_processo(args) -> int:
             return 1
         PASTA_HTML.mkdir(parents=True, exist_ok=True)
         cache.write_text(html, encoding="utf-8")
-    a = analisar_processo(parse_processo(html, str(num)), cfg)
+    a = analisar_processo(parse_processo(html, str(num)), cfg, agora_local())
     print(resumo_texto(a))
     return 0
 
@@ -178,8 +178,13 @@ def cmd_rotina(args) -> int:
     from .sincronizar import rotina
 
     modo = "imediato" if args.imediato else "agendado"
-    encerrados = args.incluir_encerrados or (modo == "agendado" and _dt.now().hour <= 7)
-    plano = rotina(Path(args.db), modo, encerrados, _cliente(args), Path(args.saida_json))
+    from .util import agora_local
+
+    agora = agora_local()
+    # 07h: passada completa nos ativos; às segundas, inclui arquivados/apensados/anexados.
+    completo = args.completo or agora.hour <= 7
+    encerrados = args.incluir_encerrados or (completo and agora.weekday() == 0)
+    plano = rotina(Path(args.db), modo, encerrados, _cliente(args), Path(args.saida_json), completo, agora)
     print(json.dumps({k: (len(v) if isinstance(v, list) else v) for k, v in plano.items()}, ensure_ascii=False))
     return 0
 
@@ -234,8 +239,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--db", default="dados/db", help="cópia do banco do artifact (ArtifactData com out_dir)")
     p.add_argument("--saida-json", default="dados/sync")
     p.add_argument("--imediato", action="store_true", help="só as solicitações pendentes")
+    p.add_argument("--completo", action="store_true",
+                   help="confere todos os ativos (automático na execução das 07h); sem isso, só o foco")
     p.add_argument("--incluir-encerrados", action="store_true",
-                   help="também confere arquivados/concluídos (automático na execução das 07h)")
+                   help="também confere arquivados/apensados/anexados (automático às segundas, 07h)")
     p.add_argument("--debug", action="store_true")
     p.set_defaults(func=cmd_rotina)
 
