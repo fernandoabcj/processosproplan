@@ -24,8 +24,10 @@ class Setor:
 
     def casa(self, unidade: str) -> bool:
         cod = codigo_unidade(unidade)
-        if cod and cod in self.codigos:
-            return True
+        if cod:
+            for c in self.codigos:
+                if c == cod or (c.endswith(".*") and (cod == c[:-2] or cod.startswith(c[:-1]))):
+                    return True
         alvo = normalizar(unidade)
         return any(p.search(alvo) for p in self.padroes)
 

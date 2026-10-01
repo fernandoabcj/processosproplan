@@ -45,12 +45,16 @@ def test_parser_ordena_e_le_campos():
 
 
 def test_classificacao_setores(cfg):
-    assert cfg.setor_de("COORDENAÇÃO DE ORÇAMENTO (11.00.20.02)") == "CODEOR"
-    assert cfg.setor_de("SECRETARIA DA PRÓ-REITORIA DE PLANEJAMENTO (11.00.20.01)") == "SECRETARIA"
-    assert cfg.setor_de("PROPLAN - SECRETARIA (11.00.20.01)") == "SECRETARIA"
-    assert cfg.setor_de("PRÓ-REITORIA DE PLANEJAMENTO E DESENVOLVIMENTO (11.00.20)") == "PROPLAN"
-    assert cfg.setor_de("COORDENAÇÃO DE CONVÊNIOS (11.00.20.04)") == "CODECON"
+    assert cfg.setor_de("PROPLAN - COORDENAÇÃO DE ORÇAMENTO (11.01.07.04)") == "CODEOR"
+    assert cfg.setor_de("PROPLAN - SECRETARIA (11.01.07.01)") == "SECRETARIA"
+    assert cfg.setor_de("PROPLAN - SECRETARIA (11.01.07.01)") == "SECRETARIA"
+    assert cfg.setor_de("PRÓ-REITORIA DE PLANEJAMENTO E DESENVOLVIMENTO (11.01.07)") == "PROPLAN"
+    assert cfg.setor_de("PROPLAN - COORDENAÇÃO DE CONVÊNIOS (11.01.07.05)") == "CODECON"
     assert cfg.setor_de("PROCURADORIA FEDERAL (11.00.05)") is None
+    # Unidades de outros órgãos com nome parecido não podem ser confundidas
+    assert cfg.setor_de("SOF - COORDENAÇÃO DE ORÇAMENTO E FINANÇAS (11.00.46.38.01)") is None
+    # Qualquer unidade abaixo de 11.01.07 é PROPLAN, mesmo sem regra específica
+    assert cfg.setor_de("PROPLAN - DIVISÃO NOVA (11.01.07.09)") == "PROPLAN"
 
 
 def test_analise_processo_em_andamento(cfg):

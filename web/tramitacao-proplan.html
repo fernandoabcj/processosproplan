@@ -131,7 +131,7 @@ const RE_PROC = /(?<!\d)(\d{5})\s*[.\-]?\s*(\d{6})\s*\/\s*(\d{4})\s*-?\s*(\d{2})
 const RE_PROC_G = new RegExp(RE_PROC.source, "g");
 const RE_DATA = /(\d{2})\/(\d{2})\/(\d{4})(?:\s+(?:às\s+)?(\d{1,2}):(\d{2})(?::(\d{2}))?)?/;
 const ROTINA = "trig_01Sbnhk7Hm8RJehKubr3H3zi";
-const URL_SIPAC = "https://sipac.ufpb.br/public/jsp/processos/processo_consulta.jsf";
+const URL_SIPAC = "https://sipac.ufpb.br/public/jsp/processos/consulta_processo.jsf";
 
 function numProc(t){ const m = RE_PROC.exec(t||""); return m ? {fmt:`${m[1]}.${m[2]}/${m[3]}-${m[4]}`, chave:m.slice(1,5).join("")} : null; }
 function todosNums(t){ const out = new Map(); for (const m of String(t||"").matchAll(RE_PROC_G)) out.set(m.slice(1,5).join(""), `${m[1]}.${m[2]}/${m[3]}-${m[4]}`); return out; }
@@ -168,12 +168,12 @@ function diasUteis(a, b, extras){
 /* ================================================================ configuração de setores */
 const CFG_PADRAO = {
   setores: [
-    {sigla:"CODEOR", nome:"Coordenação de Orçamento", codigos:[], padroes:["\\bCODEOR\\b","COORDENACAO DE ORCAMENTO"]},
-    {sigla:"CODEINFO", nome:"Coordenação de Informações", codigos:[], padroes:["\\bCODEINFO\\b","COORDENACAO DE INFORMAC"]},
-    {sigla:"CODECON", nome:"Coordenação de Convênios", codigos:[], padroes:["\\bCODECON\\b","COORDENACAO DE CONVENIOS"]},
-    {sigla:"CODEPLAN", nome:"Coordenação de Planejamento", codigos:[], padroes:["\\bCODEPLAN\\b","COORDENACAO DE PLANEJAMENTO"]},
-    {sigla:"SECRETARIA", nome:"Secretaria da PROPLAN", codigos:[], padroes:["SECRETARIA.*(PROPLAN|PRO-REITORIA DE PLANEJAMENTO)","PROPLAN.*SECRETARIA","\\bSEC[-/ ]?PROPLAN\\b"]},
-    {sigla:"PROPLAN", nome:"PROPLAN (Gabinete)", codigos:[], padroes:["\\bPROPLAN\\b","PRO-REITORIA DE PLANEJAMENTO"]},
+    {sigla:"CODEOR", nome:"Coordenação de Orçamento", codigos:["11.01.07.04"], padroes:["^PROPLAN\\b.*COORDENACAO DE ORCAMENTO","\\bCODEOR\\b"]},
+    {sigla:"CODEINFO", nome:"Coordenação de Informações", codigos:[], padroes:["^PROPLAN\\b.*COORDENACAO DE INFORMAC","\\bCODEINFO\\b"]},
+    {sigla:"CODECON", nome:"Coordenação de Convênios", codigos:[], padroes:["^PROPLAN\\b.*COORDENACAO DE CONVENIOS","\\bCODECON\\b"]},
+    {sigla:"CODEPLAN", nome:"Coordenação de Planejamento", codigos:[], padroes:["^PROPLAN\\b.*COORDENACAO DE PLANEJAMENTO","\\bCODEPLAN\\b"]},
+    {sigla:"SECRETARIA", nome:"Secretaria da PROPLAN", codigos:[], padroes:["^PROPLAN\\b.*SECRETARIA","SECRETARIA.*(PROPLAN|PRO-REITORIA DE PLANEJAMENTO)"]},
+    {sigla:"PROPLAN", nome:"PROPLAN (Gabinete)", codigos:["11.01.07.*"], padroes:["^PROPLAN\\b","PRO-REITORIA DE PLANEJAMENTO"]},
   ],
   limite_parado: 15, limite_receb: 3, limite_passagens: 3, feriados_extras: [],
 };
@@ -186,7 +186,8 @@ function compilarCfg(raw){
   c.setorDe = u => {
     if (!u) return null; if (c._cache.has(u)) return c._cache.get(u);
     const cod = (/\((\d{2}(?:\.\d{2})+)\)/.exec(u)||[])[1]; const n = norm(u); let r = null;
-    for (const s of c.setores){ if ((cod && (s.codigos||[]).includes(cod)) || s._rx.some(rx=>rx.test(n))){ r = s.sigla; break; } }
+    const casaCod = s => cod && (s.codigos||[]).some(k => k === cod || (k.endsWith(".*") && (cod === k.slice(0,-2) || cod.startsWith(k.slice(0,-1)))));
+    for (const s of c.setores){ if (casaCod(s) || s._rx.some(rx=>rx.test(n))){ r = s.sigla; break; } }
     c._cache.set(u, r); return r;
   };
   c.cor = sig => (c.setores.find(s=>s.sigla===sig)||{}).cor || "var(--ext)";
@@ -249,7 +250,7 @@ function montarProcesso(tabelas, textoTotal){
   for (const tab of tabelas){
     const t0 = norm((tab._titulo||"") + " " + (tab[0]||[]).join(" "));
     if (t0.includes("INTERESSAD") || (t0.includes("NOME") && t0.includes("IDENTIFICADOR"))){
-      interessados = tab.slice(1).map(c => c.filter(Boolean).join(" - ")).filter(Boolean).slice(0,10);
+      interessados = tab.slice(1).filter(c => c.length && !String(c[0]).endsWith(":")).map(c => c.filter(Boolean).join(" - ")).filter(Boolean).slice(0,10);
       if (interessados.length) break;
     }
   }
@@ -346,21 +347,21 @@ const EXEMPLOS = (() => {
   return [
     {numero:"23074.900001/2026-01", chave:"23074900001202601", assunto:"ORÇAMENTO: DESCENTRALIZAÇÃO DE CRÉDITO (TED)", status:"ATIVO",
      autuacao:d(29), origem:"CENTRO DE CIENCIAS EXATAS E DA NATUREZA (11.00.48)", interessados:[], movs:[
-      {envio:d(26,14), origem:"CENTRO DE CIENCIAS EXATAS E DA NATUREZA (11.00.48)", destino:"SECRETARIA DA PRÓ-REITORIA DE PLANEJAMENTO (11.00.20.01)", receb:d(23,10)},
-      {envio:d(16), origem:"SECRETARIA DA PRÓ-REITORIA DE PLANEJAMENTO (11.00.20.01)", destino:"PRÓ-REITORIA DE PLANEJAMENTO E DESENVOLVIMENTO (11.00.20)", receb:d(15,8)},
-      {envio:d(6,10), origem:"PRÓ-REITORIA DE PLANEJAMENTO E DESENVOLVIMENTO (11.00.20)", destino:"COORDENAÇÃO DE ORÇAMENTO (11.00.20.02)", receb:null}]},
+      {envio:d(26,14), origem:"CENTRO DE CIENCIAS EXATAS E DA NATUREZA (11.00.48)", destino:"PROPLAN - SECRETARIA (11.01.07.01)", receb:d(23,10)},
+      {envio:d(16), origem:"PROPLAN - SECRETARIA (11.01.07.01)", destino:"PRÓ-REITORIA DE PLANEJAMENTO E DESENVOLVIMENTO (11.01.07)", receb:d(15,8)},
+      {envio:d(6,10), origem:"PRÓ-REITORIA DE PLANEJAMENTO E DESENVOLVIMENTO (11.01.07)", destino:"PROPLAN - COORDENAÇÃO DE ORÇAMENTO (11.01.07.04)", receb:null}]},
     {numero:"23074.900002/2026-02", chave:"23074900002202602", assunto:"CONVÊNIO COM PREFEITURA MUNICIPAL", status:"ARQUIVADO",
      autuacao:d(205), origem:"GABINETE DA REITORIA (11.00.01)", interessados:[], movs:[
-      {envio:d(203), origem:"GABINETE DA REITORIA (11.00.01)", destino:"PROPLAN - SECRETARIA (11.00.20.01)", receb:d(203,11)},
-      {envio:d(202), origem:"PROPLAN - SECRETARIA (11.00.20.01)", destino:"COORDENAÇÃO DE CONVÊNIOS (11.00.20.04)", receb:d(199)},
-      {envio:d(178), origem:"COORDENAÇÃO DE CONVÊNIOS (11.00.20.04)", destino:"PROCURADORIA FEDERAL (11.00.05)", receb:d(177)},
-      {envio:d(164), origem:"PROCURADORIA FEDERAL (11.00.05)", destino:"COORDENAÇÃO DE CONVÊNIOS (11.00.20.04)", receb:d(162)},
-      {envio:d(154), origem:"COORDENAÇÃO DE CONVÊNIOS (11.00.20.04)", destino:"ARQUIVO CENTRAL (11.00.09)", receb:d(150)}]},
+      {envio:d(203), origem:"GABINETE DA REITORIA (11.00.01)", destino:"PROPLAN - SECRETARIA (11.01.07.01)", receb:d(203,11)},
+      {envio:d(202), origem:"PROPLAN - SECRETARIA (11.01.07.01)", destino:"PROPLAN - COORDENAÇÃO DE CONVÊNIOS (11.01.07.05)", receb:d(199)},
+      {envio:d(178), origem:"PROPLAN - COORDENAÇÃO DE CONVÊNIOS (11.01.07.05)", destino:"PROCURADORIA FEDERAL (11.00.05)", receb:d(177)},
+      {envio:d(164), origem:"PROCURADORIA FEDERAL (11.00.05)", destino:"PROPLAN - COORDENAÇÃO DE CONVÊNIOS (11.01.07.05)", receb:d(162)},
+      {envio:d(154), origem:"PROPLAN - COORDENAÇÃO DE CONVÊNIOS (11.01.07.05)", destino:"ARQUIVO CENTRAL (11.00.09)", receb:d(150)}]},
     {numero:"23074.900003/2026-03", chave:"23074900003202603", assunto:"PLANEJAMENTO: PDI – INDICADORES 2026", status:"ATIVO",
      autuacao:d(48), origem:"PRÓ-REITORIA DE GRADUAÇÃO (11.00.10)", interessados:[], movs:[
-      {envio:d(46), origem:"PRÓ-REITORIA DE GRADUAÇÃO (11.00.10)", destino:"SECRETARIA DA PRÓ-REITORIA DE PLANEJAMENTO (11.00.20.01)", receb:d(45)},
-      {envio:d(44), origem:"SECRETARIA DA PRÓ-REITORIA DE PLANEJAMENTO (11.00.20.01)", destino:"COORDENAÇÃO DE INFORMAÇÕES (11.00.20.03)", receb:d(41)},
-      {envio:d(30), origem:"COORDENAÇÃO DE INFORMAÇÕES (11.00.20.03)", destino:"COORDENAÇÃO DE PLANEJAMENTO (11.00.20.05)", receb:d(29)}]},
+      {envio:d(46), origem:"PRÓ-REITORIA DE GRADUAÇÃO (11.00.10)", destino:"PROPLAN - SECRETARIA (11.01.07.01)", receb:d(45)},
+      {envio:d(44), origem:"PROPLAN - SECRETARIA (11.01.07.01)", destino:"PROPLAN - COORDENAÇÃO DE INFORMAÇÕES (11.01.07.03)", receb:d(41)},
+      {envio:d(30), origem:"PROPLAN - COORDENAÇÃO DE INFORMAÇÕES (11.01.07.03)", destino:"PROPLAN - COORDENAÇÃO DE PLANEJAMENTO (11.01.07.06)", receb:d(29)}]},
   ];
 })();
 
@@ -597,13 +598,13 @@ function telaSetores(){
   const itens = c.setores.map((s,i) => `<div class="cfg-item" data-i="${i}">
     <label>Sigla<input type="text" id="cs-sig-${i}" value="${esc(s.sigla)}" ${pode?"":"disabled"}></label>
     <label>Nome<input type="text" id="cs-nome-${i}" value="${esc(s.nome)}" ${pode?"":"disabled"}></label>
-    <label>Códigos SIPAC (vírgula)<input type="text" id="cs-cod-${i}" value="${esc((s.codigos||[]).join(", "))}" placeholder="ex.: 11.00.20.02" ${pode?"":"disabled"}></label>
+    <label>Códigos SIPAC (vírgula)<input type="text" id="cs-cod-${i}" value="${esc((s.codigos||[]).join(", "))}" placeholder="ex.: 11.01.07.04" ${pode?"":"disabled"}></label>
     <label>Padrões do nome (um por linha)<textarea id="cs-pad-${i}" rows="2" ${pode?"":"disabled"}>${esc((s.padroes||[]).join("\n"))}</textarea></label></div>`).join("");
   const unid = new Map(); for (const p of dados()) for (const m of p.movs||[]) for (const u of [m.origem,m.destino]) if (u) unid.set(u,(unid.get(u)||0)+1);
   const linhasU = [...unid.entries()].sort((a,b)=>b[1]-a[1]).slice(0,60).map(([u,n]) => `<tr><td>${esc(u)}</td><td>${chip(S.cfg.setorDe(u)) || `<span class="note">externa</span>`}</td><td class="n">${n}</td></tr>`);
   return `<section class="sec">
     <div class="sec-head"><h2>Setores da PROPLAN</h2><span class="note">${pode ? "A primeira regra que casar define o setor. Deixe a PROPLAN (Gabinete) por último." : "Somente editores podem alterar estas regras."}</span></div>
-    <p class="note">O critério mais seguro é o <b>código SIPAC</b> da unidade, que aparece entre parênteses no nome, como em “COORDENAÇÃO DE ORÇAMENTO (11.00.20.02)”. Os padrões do nome são comparados em maiúsculas e sem acentos.</p>
+    <p class="note">O critério mais seguro é o <b>código SIPAC</b> da unidade, que aparece entre parênteses no nome, como em “PROPLAN - COORDENAÇÃO DE ORÇAMENTO (11.01.07.04)”. Um código terminado em <span class="mono">.*</span> vale para todas as unidades abaixo dele (<span class="mono">11.01.07.*</span> = toda a PROPLAN). Os padrões do nome são comparados em maiúsculas e sem acentos. Evite padrões genéricos: “COORDENACAO DE ORCAMENTO” sozinho também pega a “SOF - COORDENAÇÃO DE ORÇAMENTO E FINANÇAS”.</p>
     <div class="cfg-grid">${itens}</div>
     <h3>Alertas e prazos</h3>
     <div class="row">

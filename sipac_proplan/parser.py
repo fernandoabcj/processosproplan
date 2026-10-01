@@ -184,17 +184,26 @@ def _campo(campos: dict[str, str], *chaves: str) -> str:
     return ""
 
 
+def _linhas_proprias(tabela: Tag) -> list[Tag]:
+    """Linhas que pertencem a esta tabela, sem as de tabelas aninhadas."""
+    return [tr for tr in tabela.find_all("tr") if tr.find_parent("table") is tabela]
+
+
 def _ler_interessados(soup: BeautifulSoup) -> list[str]:
     for tabela in soup.find_all("table"):
-        cab = normalizar(" ".join(_texto_celulas(tabela.find("tr")) if tabela.find("tr") else []))
+        linhas = _linhas_proprias(tabela)
+        if not linhas:
+            continue
+        cab = normalizar(" ".join(_texto_celulas(linhas[0])))
         legenda = tabela.find("caption")
         titulo = normalizar(legenda.get_text(" ")) if legenda else ""
         if "INTERESSAD" in titulo or ("NOME" in cab and ("IDENTIFICADOR" in cab or "TIPO" in cab)):
             nomes = []
-            for linha in tabela.find_all("tr")[1:]:
+            for linha in linhas[1:]:
                 cel = _texto_celulas(linha)
-                if cel and not linha.find("table"):
-                    nomes.append(" - ".join(x for x in cel if x))
+                if not cel or cel[0].endswith(":") or linha.find("table"):
+                    continue  # rótulos de dados gerais ou tabelas aninhadas
+                nomes.append(" - ".join(x for x in cel if x))
             if nomes:
                 return nomes
     return []

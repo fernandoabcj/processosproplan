@@ -24,7 +24,7 @@ from bs4 import BeautifulSoup, Tag
 from .util import NumeroProcesso, normalizar
 
 BASE_URL = "https://sipac.ufpb.br"
-URL_CONSULTA = "/public/jsp/processos/processo_consulta.jsf"
+URL_CONSULTA = "/public/jsp/processos/consulta_processo.jsf"
 URL_DETALHE = "/public/jsp/processos/processo_detalhado.jsf"
 
 _RE_ID_DETALHE = re.compile(r"processo_detalhado\.jsf\?(?:[^\"'\s]*&)?id=(\d+)")
