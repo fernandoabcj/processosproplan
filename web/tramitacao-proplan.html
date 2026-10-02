@@ -658,13 +658,16 @@ function telaAdicionar(){
   return `<section class="sec">
     <div class="sec-head"><h2>Adicionar processo pelo número${V() ? " – " + esc(V()) : ""}</h2><span class="note">A busca no SIPAC começa na hora. Depois: de hora em hora (08h–18h) os processos que estão na PROPLAN ou se movimentaram nos últimos 3 dias; às 07h todos os ativos; às segundas, também os arquivados.</span></div>
     <form class="row" id="form-num">
-      <input type="text" id="novo-num" placeholder="23074.012345/2026-56" aria-label="Número do processo" style="flex:1 1 260px;max-width:420px" ${so||!S.db?"disabled":""}>
-      <button class="btn pri" type="submit" ${so||!S.db?"disabled":""}>Adicionar</button>
+      <input type="text" id="novo-num" placeholder="23074.012345/2026-56" aria-label="Número do processo" style="flex:1 1 260px;max-width:420px" ${podeCadastrar()?"":"disabled"}>
+      <button class="btn pri" type="submit" ${podeCadastrar()?"":"disabled"}>Adicionar</button>
     </form>
+    ${S.modo === "publico" ? `<span class="note"><b>Visualização pública:</b> para cadastrar é preciso estar conectado ao claude.ai. Se você não estiver, o número fica guardado neste navegador até você entrar.</span>` : ""}
     <span class="note">Pode colar vários números de uma vez. Cada processo entra na fila e na lista de acompanhamento ${V() ? "da " + esc(V()) : "geral"}, que é atualizada de hora em hora, das 07h às 18h.</span>
     ${fila.length ? tabela("t-fila",[{t:"Na fila de busca"},{t:"Pedido em"}], fila.map(f=>`<tr><td class="mono">${esc(f.numero)}</td><td>${f.solicitado_em ? fd(new Date(f.solicitado_em),true) : ""}</td></tr>`)) : ""}
   </section>
-  ${S.imediata ? `<div class="banner"><span>${S.imediata.estado === "enviando" ? "Iniciando a busca no SIPAC…" :
+  ${S.modo === "publico" && lerPendentes().length ? `<div class="banner"><span><b>${lerPendentes().length} processo(s) guardado(s) neste navegador:</b> ${lerPendentes().map(x => esc(x.numero)).join(", ")}.
+     Para registrar e buscar no SIPAC, <a href="https://claude.ai/login" target="_blank" rel="noopener">entre na sua conta do claude.ai</a> e abra este mesmo link de novo, neste navegador: eles serão cadastrados automaticamente.</span></div>` : ""}
+  ${S.imediata && S.imediata.estado !== "publico" ? `<div class="banner"><span>${S.imediata.estado === "enviando" ? "Iniciando a busca no SIPAC…" :
      S.imediata.estado === "ok" ? `<b>Busca imediata iniciada às ${fd(S.imediata.quando,true).slice(-5)}.</b> O processo aparece no painel assim que a busca terminar, em geral em poucos minutos.` :
      S.imediata.estado === "falhou" ? `<b>Busca imediata indisponível:</b> ${esc(S.imediata.motivo)}. O processo está na fila e será buscado na próxima atualização.` :
      `O processo está na fila e será buscado na próxima atualização.`}</span></div>` : ""}
@@ -763,7 +766,7 @@ document.addEventListener("click", async ev => {
   }
 });
 document.addEventListener("submit", ev => {
-  if (ev.target.id === "form-num"){ ev.preventDefault(); solicitar($("#novo-num").value); }
+  if (ev.target.id === "form-num"){ ev.preventDefault(); S.modo === "publico" ? guardarPublico($("#novo-num").value) : solicitar($("#novo-num").value); }
 });
 document.addEventListener("input", ev => {
   if (ev.target.id === "busca"){ S.busca = ev.target.value; render(); }
@@ -802,6 +805,32 @@ function ordenar(th){
     .forEach(r => tb.appendChild(r));
 }
 
+/* Cadastro pelo número: com o banco (logado no claude.ai) grava na hora; na visualização
+   pública guarda neste navegador e envia sozinho quando a pessoa abrir a página logada. */
+const CHAVE_PEND = "pendentes_cadastro";
+function lerPendentes(){ try { return JSON.parse(localStorage.getItem(CHAVE_PEND) || "[]"); } catch { return []; } }
+function gravarPendentes(v){ try { v.length ? localStorage.setItem(CHAVE_PEND, JSON.stringify(v)) : localStorage.removeItem(CHAVE_PEND); } catch {} }
+function podeCadastrar(){ return S.modo === "publico" || (S.db && S.podeEscrever !== false); }
+function guardarPublico(texto){
+  const nums = todosNums(texto);
+  if (!nums.size){ toast("Digite um número de processo no formato 23074.000000/2026-00."); return; }
+  const atual = lerPendentes(), set = new Map(atual.map(x => [x.numero, x]));
+  for (const numero of nums.values()) if (!set.has(numero)) set.set(numero, {numero, setor: V() || null});
+  gravarPendentes([...set.values()]);
+  const inp = $("#novo-num"); if (inp) inp.value = "";
+  S.imediata = {estado:"publico"}; render();
+}
+async function enviarPendentes(){
+  const pend = lerPendentes(); if (!pend.length || !S.db || S.podeEscrever === false) return;
+  const porSetor = new Map();
+  for (const x of pend){ const k = x.setor || ""; porSetor.set(k, [...(porSetor.get(k)||[]), x.numero]); }
+  const visao = S.visao;
+  try {
+    for (const [setor, nums] of porSetor){ S.visao = setor; await solicitar(nums.join("\n")); }
+    gravarPendentes([]);
+    toast(`${pend.length} processo(s) guardado(s) na visualização pública foram cadastrados.`);
+  } finally { S.visao = visao; render(); }
+}
 async function solicitar(texto){
   const nums = todosNums(texto);
   if (!nums.size){ toast("Digite um número de processo no formato 23074.000000/2026-00."); return; }
@@ -936,6 +965,7 @@ async function carregarProcessos(silencioso){
         if (lim < 200) lim = Math.min(200, lim * 2);
       }
       S.reais = novo; S.modo = "ok"; S.erroMsg = "";
+      setTimeout(enviarPendentes, 0);
     } catch(e){
       if (!silencioso || !S.reais.size){ S.modo = "erro"; S.erroMsg = e?.code || e?.message || String(e); }
     } finally { _carregando = null; render(); }
