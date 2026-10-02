@@ -388,7 +388,7 @@ const EXEMPLOS = (() => {
 })();
 
 /* ================================================================ estado e armazenamento */
-const S = { view:"painel", reais:new Map(), carregou:false, db:null, user:null, uid:null, podeEscrever:null, podeAdmin:false,
+const S = { modo: window.claude?.use ? "carregando" : "local", progresso:0, erroMsg:"", view:"painel", reais:new Map(), carregou:false, db:null, user:null, uid:null, podeEscrever:null, podeAdmin:false,
   cfgRaw:CFG_PADRAO, cfg:compilarCfg(CFG_PADRAO), lista:[], listaPor:{_geral:[]}, chavesPor:{}, visao:"", fila:new Map(), status:null, sel:null, busca:"", filtroSetor:"", filtroSit:"", confirmar:null, ordem:{} };
 
 /* ---------- visão por setor ("" = toda a PROPLAN) */
@@ -445,8 +445,10 @@ async function gravarLista(por){
   else { aplicarLista({por_setor:limpo}); render(); }
 }
 
-function dados(){ return S.reais.size ? [...S.reais.values()] : EXEMPLOS; }
-const ehExemplo = () => S.reais.size === 0;
+/* Exemplos fictícios só na pré-visualização local (fora do claude.ai). No link publicado
+   a página nunca mostra dados inventados: mostra o estado real (carregando, sem acesso, erro). */
+function dados(){ return ehExemplo() ? EXEMPLOS : [...S.reais.values()]; }
+const ehExemplo = () => S.modo === "local" && S.reais.size === 0;
 /* Análises guardadas por documento e minuto: com centenas de processos, recalcular tudo
    a cada tecla na busca deixaria a página lenta. */
 const _cache = new Map(); let _cacheMin = 0, _cacheCfg = null;
@@ -465,7 +467,7 @@ let _t; function toast(msg){ const t = $("#toast"); t.textContent = msg; t.hidde
 async function salvarProcesso(p){
   const doc = {...p, atualizado_em:new Date().toISOString(), atualizado_por:S.uid || null};
   if (S.db){
-    try { await S.db.collection("processos").doc(p.chave).set(doc); }
+    try { await S.db.collection("processos").doc(p.chave).set(doc); S.reais.set(p.chave, doc); }
     catch(e){
       if (e && e.code === "invalid_argument"){ S.podeEscrever = false; throw new Error("Você não tem permissão para gravar nesta ferramenta (acesso somente leitura)."); }
       if (e && e.code === "quota_exceeded") throw new Error("O limite de armazenamento foi atingido. Remova processos antigos.");
@@ -475,7 +477,7 @@ async function salvarProcesso(p){
 }
 async function removerProcesso(chave){
   if (S.db){ try { await S.db.collection("processos").doc(chave).delete(); } catch { toast("Não foi possível remover."); return; } }
-  else { S.reais.delete(chave); }
+  S.reais.delete(chave);
   S.sel = null; render(); toast("Processo removido.");
 }
 
@@ -517,9 +519,12 @@ function tabela(id, cab, linhas, vazio){
   return `<div class="tw"><table id="${id}"><thead><tr>${cab.map(c=>`<th class="${c.n?"n":""} ${c.ns?"ns":""}">${esc(c.t)}</th>`).join("")}</tr></thead><tbody>${linhas.join("")}</tbody></table></div>`;
 }
 function bannerExemplo(){
+  if (S.modo === "carregando") return `<div class="banner"><span><b>Carregando os processos…</b> ${S.progresso ? `${S.progresso} recebidos até agora.` : "Isso leva alguns segundos na primeira abertura."}</span></div>`;
+  if (S.modo === "sem_acesso") return `<div class="banner"><span><b>Os dados não estão disponíveis para você neste acesso.</b> Os processos só aparecem para quem está conectado ao claude.ai. Entre na sua conta do claude.ai (com o e-mail para o qual o link foi compartilhado) e abra o link de novo.</span></div>`;
+  if (S.modo === "erro") return `<div class="banner"><span><b>Não foi possível carregar os processos agora</b> (${esc(S.erroMsg || "erro desconhecido")}). Recarregue a página em instantes.</span><button class="btn" id="recarregar">Tentar de novo</button></div>`;
+  if (S.modo === "ok" && !S.reais.size) return `<div class="banner"><span><b>Nenhum processo visível para você.</b> Se você deveria ver os dados, peça ao responsável para compartilhar a página com o seu e-mail.</span></div>`;
   if (!ehExemplo()) return "";
-  return `<div class="banner"><span><b>Dados de exemplo (fictícios).</b> Eles somem quando o primeiro processo real for adicionado.</span>
-    <button class="btn pri" data-ir="adicionar">Adicionar processos</button></div>`;
+  return `<div class="banner"><span><b>Dados de exemplo (fictícios).</b> Pré-visualização fora do claude.ai.</span></div>`;
 }
 
 /* ================================================================ telas */
@@ -742,6 +747,7 @@ document.addEventListener("click", async ev => {
   const tr = t.closest("tr[data-p]"); if (tr && !t.closest("a,button")){ abrir(tr.dataset.p); return; }
   switch (t.id){
     case "fechar": S.sel = null; render(); break;
+    case "recarregar": carregarProcessos(); break;
     case "remover": S.confirmar = S.sel; render(); break;
     case "conf-nao": S.confirmar = null; render(); break;
     case "conf-sim": await removerProcesso(S.confirmar); S.confirmar = null; break;
@@ -899,6 +905,35 @@ async function exportar(){
   catch(e){ if (e?.code !== "declined") toast(e?.code === "rate_limited" ? "Aguarde um instante e tente de novo." : "Não foi possível gerar o download."); }
 }
 
+/* ================================================================ carga dos processos
+   Em páginas de 1.000 (limite de uma consulta), ordenadas pela chave do processo. */
+let _carregando = null;
+async function carregarProcessos(silencioso){
+  if (!S.db) return;
+  if (_carregando) return _carregando;
+  _carregando = (async () => {
+    const col = S.db.collection("processos"), novo = new Map();
+    let ultimo = null;
+    if (!silencioso){ S.modo = "carregando"; S.progresso = 0; render(); }
+    try {
+      for (let i = 0; i < 100; i++){
+        const q = ultimo === null ? col.orderBy("chave").limit(1000) : col.where("chave", ">", ultimo).orderBy("chave").limit(1000);
+        let snap;
+        try { snap = await q.get(); }
+        catch(e){ if (e?.code === "unavailable"){ await new Promise(r => setTimeout(r, 800 + Math.random()*800)); snap = await q.get(); } else throw e; }
+        snap.docs.forEach(d => novo.set(d.id, d.data()));
+        if (!silencioso){ S.progresso = novo.size; render(); }
+        if (snap.size < 1000) break;
+        ultimo = snap.docs[snap.docs.length - 1].data().chave;
+      }
+      S.reais = novo; S.modo = "ok"; S.erroMsg = "";
+    } catch(e){
+      if (!silencioso || !S.reais.size){ S.modo = "erro"; S.erroMsg = e?.code || e?.message || String(e); }
+    } finally { _carregando = null; render(); }
+  })();
+  return _carregando;
+}
+
 /* ================================================================ inicialização */
 (function(){
   const h = (location.hash || "").slice(1).toUpperCase();
@@ -912,13 +947,18 @@ render();
   const [db, user] = await Promise.all([window.claude.use("db").catch(()=>null), window.claude.use("user").catch(()=>null)]);
   S.user = user;
   if (user){ S.uid = await user.id(); S.podeAdmin = await user.canEdit(); const w = await user.can("data.write"); if (w === false) S.podeEscrever = false; }
-  if (!db){ render(); return; }
+  if (!db){ S.modo = "sem_acesso"; render(); return; }
   S.db = db;
-  db.collection("processos").onSnapshot(snap => {
-    S.reais = new Map(snap.docs.map(d => [d.id, d.data()])); S.carregou = true; render();
-  }, () => toast("Conexão com os dados perdida. Recarregue a página."));
+  carregarProcessos();
+  setInterval(() => { if (document.visibilityState === "visible") carregarProcessos(true); }, 15*60*1000);
   db.collection("solicitacoes").onSnapshot(snap => { S.fila = new Map(snap.docs.map(d => [d.id, d.data()])); if (document.activeElement?.id !== "novo-num") render(); }, ()=>{});
-  db.doc("status/coletor").onSnapshot(s => { S.status = s.exists ? s.data() : null; if (document.activeElement?.id !== "novo-num") render(); }, ()=>{});
+  db.doc("status/coletor").onSnapshot(s => {
+    const novo = s.exists ? s.data() : null, antes = S.status?.ultima_execucao;
+    S.status = novo;
+    // A rotina terminou uma passada: recarrega os processos para mostrar as mudanças.
+    if (antes && novo?.ultima_execucao && novo.ultima_execucao !== antes) carregarProcessos(true);
+    if (document.activeElement?.id !== "novo-num") render();
+  }, ()=>{});
   db.doc("config/setores").onSnapshot(s => aplicarCfg(s.exists ? s.data() : null), ()=>{});
   db.doc("acompanhamento/lista").onSnapshot(s => { aplicarLista(s.exists ? s.data() : null); if (S.view === "adicionar" && document.activeElement?.id !== "lista") render(); }, ()=>{});
   render();
