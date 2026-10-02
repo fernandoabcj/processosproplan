@@ -906,7 +906,7 @@ async function exportar(){
 }
 
 /* ================================================================ carga dos processos
-   Em páginas de 1.000 (limite de uma consulta), ordenadas pela chave do processo. */
+   Em páginas pequenas (o banco limita o tamanho da resposta), ordenadas pela chave do processo. */
 let _carregando = null;
 async function carregarProcessos(silencioso){
   if (!S.db) return;
@@ -916,15 +916,22 @@ async function carregarProcessos(silencioso){
     let ultimo = null;
     if (!silencioso){ S.modo = "carregando"; S.progresso = 0; render(); }
     try {
-      for (let i = 0; i < 100; i++){
-        const q = ultimo === null ? col.orderBy("chave").limit(1000) : col.where("chave", ">", ultimo).orderBy("chave").limit(1000);
+      // Páginas de até 200; se o banco recusar por tamanho (resource_exhausted), divide ao meio.
+      let lim = 200;
+      for (let i = 0; i < 2000; i++){
+        const q = ultimo === null ? col.orderBy("chave").limit(lim) : col.where("chave", ">", ultimo).orderBy("chave").limit(lim);
         let snap;
         try { snap = await q.get(); }
-        catch(e){ if (e?.code === "unavailable"){ await new Promise(r => setTimeout(r, 800 + Math.random()*800)); snap = await q.get(); } else throw e; }
+        catch(e){
+          if (e?.code === "resource_exhausted" && lim > 5){ lim = Math.max(5, Math.floor(lim/2)); continue; }
+          if (e?.code === "unavailable"){ await new Promise(r => setTimeout(r, 800 + Math.random()*800)); continue; }
+          throw e;
+        }
         snap.docs.forEach(d => novo.set(d.id, d.data()));
         if (!silencioso){ S.progresso = novo.size; render(); }
-        if (snap.size < 1000) break;
+        if (snap.size < lim) break;
         ultimo = snap.docs[snap.docs.length - 1].data().chave;
+        if (lim < 200) lim = Math.min(200, lim * 2);
       }
       S.reais = novo; S.modo = "ok"; S.erroMsg = "";
     } catch(e){
