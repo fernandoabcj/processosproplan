@@ -221,3 +221,24 @@ def test_rotina_de_hora_em_hora_so_confere_o_foco(tmp_path):
     assert ctx["pulados_fora_do_foco"] == 1
     nums, _ = planejar(db, "agendado", False, completo=True, agora=agora)
     assert len(nums) == 3
+
+
+def test_snapshot_compacto(tmp_path):
+    import json
+
+    from sipac_proplan.sincronizar import processo_para_doc
+    from sipac_proplan.snapshot import exportar
+
+    db = tmp_path / "db"
+    (db / "processos").mkdir(parents=True)
+    (db / "acompanhamento").mkdir()
+    d = processo_para_doc(_ler("processo_em_andamento.html"))
+    (db / "processos" / f"{d['chave']}.json").write_text(json.dumps(d), encoding="utf-8")
+    (db / "acompanhamento" / "lista.json").write_text(json.dumps({"numeros": [d["numero"]]}), encoding="utf-8")
+    r = exportar(db, tmp_path / "dados.json")
+    assert r["processos"] == 1
+    out = json.loads((tmp_path / "dados.json").read_text(encoding="utf-8"))
+    p = out["processos"][0]
+    assert p[0] == d["numero"] and len(p[8]) == len(d["movs"])
+    assert out["unidades"][p[8][-1][2]] == d["movs"][-1]["destino"]
+    assert out["lista"]["numeros"] == [d["numero"]]

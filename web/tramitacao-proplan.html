@@ -482,6 +482,7 @@ async function removerProcesso(chave){
 }
 
 async function importar(conteudos){
+  if (S.modo === "publico"){ toast("Na visualização pública não é possível cadastrar. Entre na sua conta do claude.ai."); return; }
   let ok = 0; const erros = [];
   for (const {html, texto, nome} of conteudos){
     try {
@@ -520,7 +521,8 @@ function tabela(id, cab, linhas, vazio){
 }
 function bannerExemplo(){
   if (S.modo === "carregando") return `<div class="banner"><span><b>Carregando os processos…</b> ${S.progresso ? `${S.progresso} recebidos até agora.` : "Isso leva alguns segundos na primeira abertura."}</span></div>`;
-  if (S.modo === "sem_acesso") return `<div class="banner"><span><b>Os dados não estão disponíveis para você neste acesso.</b> Os processos só aparecem para quem está conectado ao claude.ai. Entre na sua conta do claude.ai (com o e-mail para o qual o link foi compartilhado) e abra o link de novo.</span></div>`;
+  if (S.modo === "publico") return `<div class="banner"><span><b>Visualização pública, somente consulta.</b> Dados de ${S.publicoEm ? fd(new Date(S.publicoEm), true) : "—"}, atualizados de hora em hora. Para cadastrar processos, entre na sua conta do claude.ai.</span></div>`;
+  if (S.modo === "sem_acesso") return `<div class="banner"><span><b>Não foi possível carregar os dados agora</b>${S.erroMsg ? ` (${esc(S.erroMsg)})` : ""}. Recarregue a página em instantes.</span></div>`;
   if (S.modo === "erro") return `<div class="banner"><span><b>Não foi possível carregar os processos agora</b> (${esc(S.erroMsg || "erro desconhecido")}). Recarregue a página em instantes.</span><button class="btn" id="recarregar">Tentar de novo</button></div>`;
   if (S.modo === "ok" && !S.reais.size) return `<div class="banner"><span><b>Nenhum processo visível para você.</b> Se você deveria ver os dados, peça ao responsável para compartilhar a página com o seu e-mail.</span></div>`;
   if (!ehExemplo()) return "";
@@ -670,7 +672,7 @@ function telaAdicionar(){
   <section class="sec">
     <h2>Colar a página do processo (alternativa manual)</h2>
     ${so ? `<div class="banner"><span>Seu acesso a esta ferramenta é <b>somente leitura</b>. Peça ao responsável acesso de Colaborador para adicionar processos.</span></div>` : ""}
-    ${!S.db ? `<div class="banner"><span><b>Modo local:</b> o armazenamento compartilhado não está disponível nesta visualização. O que você colar aqui fica só nesta aba.</span></div>` : ""}
+    ${S.modo === "local" ? `<div class="banner"><span><b>Modo local:</b> o armazenamento compartilhado não está disponível nesta visualização. O que você colar aqui fica só nesta aba.</span></div>` : ""}
     <ol class="steps">
       <li>Abra a <a href="${URL_SIPAC}" target="_blank" rel="noopener">consulta pública de processos do SIPAC</a>, busque o processo e abra a tela de detalhes, que mostra as movimentações.</li>
       <li>Selecione tudo (<b>Ctrl+A</b>) e copie (<b>Ctrl+C</b>).</li>
@@ -692,7 +694,7 @@ function telaAdicionar(){
 }
 
 function telaSetores(){
-  const c = S.cfgRaw, pode = S.podeAdmin || !S.db;
+  const c = S.cfgRaw, pode = S.podeAdmin || S.modo === "local";
   const itens = c.setores.map((s,i) => `<div class="cfg-item" data-i="${i}">
     <label>Sigla<input type="text" id="cs-sig-${i}" value="${esc(s.sigla)}" ${pode?"":"disabled"}></label>
     <label>Nome<input type="text" id="cs-nome-${i}" value="${esc(s.nome)}" ${pode?"":"disabled"}></label>
@@ -941,6 +943,31 @@ async function carregarProcessos(silencioso){
   return _carregando;
 }
 
+/* Sem o banco (visitante não conectado ao claude.ai): lê a fotografia pública dados.json,
+   publicada junto com a página e atualizada pela rotina. Só consulta. */
+async function carregarPublico(silencioso){
+  if (!silencioso){ S.modo = "carregando"; render(); }
+  try {
+    const r = await fetch("dados.json", {cache:"no-cache"});
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const o = await r.json(), U = o.unidades || [];
+    S.reais = new Map((o.processos || []).map(p => {
+      const numero = p[0], chave = numProc(numero)?.chave || String(numero).replace(/\D/g, "");
+      return [chave, {numero, chave, assunto:p[1], assunto_detalhado:p[2], natureza:p[3], status:p[4], autuacao:p[5],
+        origem:U[p[6]], interessados:p[7] || [], fonte:"automatico", atualizado_em:p[9],
+        movs:(p[8] || []).map(m => ({envio:m[0], origem:U[m[1]], destino:U[m[2]], enviado_por:m[3], receb:m[4], recebido_por:m[5], urgente:!!m[6]}))}];
+    }));
+    if (o.lista) aplicarLista(o.lista);
+    S.status = o.status || null;
+    if (o.config) aplicarCfg(o.config);
+    S.publicoEm = o.gerado_em; S.modo = "publico"; S.podeEscrever = false; S.erroMsg = "";
+    _cache.clear();
+  } catch(e){
+    if (!silencioso || !S.reais.size){ S.modo = "sem_acesso"; S.erroMsg = String(e?.message || e); }
+  }
+  render();
+}
+
 /* ================================================================ inicialização */
 (function(){
   const h = (location.hash || "").slice(1).toUpperCase();
@@ -954,7 +981,7 @@ render();
   const [db, user] = await Promise.all([window.claude.use("db").catch(()=>null), window.claude.use("user").catch(()=>null)]);
   S.user = user;
   if (user){ S.uid = await user.id(); S.podeAdmin = await user.canEdit(); const w = await user.can("data.write"); if (w === false) S.podeEscrever = false; }
-  if (!db){ S.modo = "sem_acesso"; render(); return; }
+  if (!db){ carregarPublico(); setInterval(() => { if (document.visibilityState === "visible") carregarPublico(true); }, 15*60*1000); return; }
   S.db = db;
   carregarProcessos();
   setInterval(() => { if (document.visibilityState === "visible") carregarProcessos(true); }, 15*60*1000);

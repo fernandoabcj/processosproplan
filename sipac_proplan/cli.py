@@ -189,6 +189,14 @@ def cmd_rotina(args) -> int:
     return 0
 
 
+def cmd_snapshot(args) -> int:
+    from .snapshot import exportar
+
+    r = exportar(Path(args.db), Path(args.saida), Path(args.sync) if args.sync else None)
+    print(json.dumps(r))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="sipac_proplan",
@@ -245,6 +253,12 @@ def main(argv: list[str] | None = None) -> int:
                    help="também confere arquivados/apensados/anexados (automático às segundas, 07h)")
     p.add_argument("--debug", action="store_true")
     p.set_defaults(func=cmd_rotina)
+
+    p = sub.add_parser("snapshot", help="gera dados.json (fotografia pública) para publicar com a página")
+    p.add_argument("--db", default="dados/db", help="cópia do banco do artifact (ArtifactData com out_dir)")
+    p.add_argument("--sync", help="pasta da última rotina (aplica alterados e status por cima)")
+    p.add_argument("--saida", default="dados/dados.json")
+    p.set_defaults(func=cmd_snapshot)
 
     p = sub.add_parser("processo", help="mostra no terminal a análise de um processo")
     p.add_argument("numero")
